@@ -1,0 +1,225 @@
+.sidebar {
+  width: 220px;
+  min-width: 220px;
+  height: 100%;
+  background: var(--c-bg-raised);
+  border-right: 1px solid var(--c-border);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: relative;
+  z-index: 10;
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 14px 10px;
+  border-bottom: 1px solid var(--c-border);
+}
+
+.server-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-md);
+  background: var(--c-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+  flex-shrink: 0;
+  box-shadow: 0 0 12px var(--c-accent-glow);
+}
+
+.server-name {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--c-text-primary);
+}
+
+.server-sub {
+  margin-top: 1px;
+}
+
+.sidebar-section {
+  padding: 8px 8px 0;
+}
+
+.section-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--c-text-muted);
+  padding: 8px 6px 4px;
+}
+
+.channel-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 8px;
+  border-radius: var(--r-sm);
+  color: var(--c-text-secondary);
+  font-size: 13.5px;
+  text-align: left;
+  transition: background var(--t-fast), color var(--t-fast);
+  position: relative;
+}
+.channel-item:hover {
+  background: var(--c-bg-elevated);
+  color: var(--c-text-primary);
+}
+.channel-item.active {
+  background: var(--c-accent-dim);
+  color: var(--c-text-primary);
+}
+.channel-item.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  bottom: 4px;
+  width: 3px;
+  background: var(--c-accent);
+  border-radius: 0 3px 3px 0;
+}
+
+.channel-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.channel-count {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--c-text-muted);
+  flex-shrink: 0;
+}
+
+/* Active users */
+.active-users {
+  margin-top: 4px;
+  padding-top: 0;
+}
+
+.user-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: var(--r-sm);
+}
+.user-row:hover { background: var(--c-bg-elevated); }
+
+.user-avatar-sm {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 600;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.you-avatar {
+  background: var(--c-accent-dim);
+  color: var(--c-accent);
+  border: 1px solid var(--c-accent-glow);
+}
+
+.speaking-ring {
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid var(--c-green);
+  animation: pulse-ring 1.5s ease-out infinite;
+  pointer-events: none;
+}
+
+.user-name-sm {
+  font-size: 12.5px;
+  color: var(--c-text-secondary);
+  flex: 1;
+}
+
+.video-badge {
+  background: var(--c-accent-dim);
+  color: var(--c-accent);
+  padding: 1px 5px;
+  border-radius: var(--r-pill);
+  font-size: 10px;
+}
+
+/* Spacer */
+.sidebar-spacer { flex: 1; }
+
+/* User bar */
+.user-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 10px;
+  border-top: 1px solid var(--c-border);
+  background: var(--c-bg-base);
+}
+
+.user-bar-avatar {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.avatar-letter {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--c-accent-dim);
+  color: var(--c-accent);
+  border: 1.5px solid var(--c-accent-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.status-dot {
+  position: absolute;
+  bottom: -1px;
+  right: -1px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 2px solid var(--c-bg-base);
+}
+
+.user-bar-info { flex: 1; overflow: hidden; }
+
+.user-bar-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.icon-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  color: var(--c-text-secondary);
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.icon-btn:hover { background: var(--c-bg-hover); color: var(--c-text-primary); }
+.icon-btn.danger { color: var(--c-red); }
+.icon-btn.danger:hover { background: var(--c-red-dim); }
+.icon-btn.active { color: var(--c-accent); }
