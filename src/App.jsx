@@ -7,6 +7,8 @@ import { CallView } from './components/CallView';
 import { SettingsModal } from './components/Settings';
 import { Notifications } from './components/Notifications';
 
+console.log("APP.JSX IS LOADING");
+
 export default function App() {
   const agora = useAgora();
   const { currentView } = useAppStore();

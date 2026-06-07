@@ -1,12 +1,11 @@
 import { useEffect, useRef } from 'react';
 import {
   Mic, MicOff, Video, VideoOff, Monitor, MonitorOff,
-  PhoneOff, Settings, Users, Wifi, WifiOff, MessageSquare
+  PhoneOff, Settings
 } from 'lucide-react';
 import { useAppStore } from '../contexts/store';
 import './CallView.css';
 
-// Network quality indicator
 function NetQuality({ quality }) {
   if (!quality) return null;
   const up = quality.uplinkNetworkQuality;
@@ -21,27 +20,34 @@ function NetQuality({ quality }) {
   );
 }
 
-// Video tile for a remote or local user
 function VideoTile({ user, isLocal, videoRef, speaking }) {
   const containerRef = useRef(null);
 
   useEffect(() => {
+    // Only handle remote tracks here — local video is handled by CallView
     if (!isLocal && user.hasVideo && user.videoTrack && containerRef.current) {
       user.videoTrack.play(containerRef.current);
     }
-    return () => user.videoTrack?.stop?.();
-  }, [user, isLocal]);
+    return () => {
+      // Only stop remote tracks on cleanup, never touch local
+      if (!isLocal) {
+        user.videoTrack?.stop?.();
+      }
+    };
+  }, [user.uid, user.hasVideo, user.videoTrack, isLocal]);
 
   return (
     <div className={`video-tile ${speaking ? 'speaking' : ''}`}>
-      {/* Video surface */}
       <div className="video-surface" ref={!isLocal ? containerRef : videoRef}>
-        {/* Fallback avatar when no video */}
         {!user.hasVideo && (
           <div className="video-avatar">
             <div
               className="avatar-circle"
-              style={{ background: user.color + '22', color: user.color, boxShadow: speaking ? `0 0 0 3px ${user.color}` : 'none' }}
+              style={{
+                background: user.color + '22',
+                color: user.color,
+                boxShadow: speaking ? `0 0 0 3px ${user.color}` : 'none'
+              }}
             >
               {user.avatar}
               {speaking && <span className="tile-speaking-ring" style={{ borderColor: user.color }} />}
@@ -50,8 +56,6 @@ function VideoTile({ user, isLocal, videoRef, speaking }) {
           </div>
         )}
       </div>
-
-      {/* Tile overlay */}
       <div className="tile-overlay">
         <div className="tile-info">
           <span className="tile-name">{user.name}{isLocal ? ' (you)' : ''}</span>
@@ -59,7 +63,6 @@ function VideoTile({ user, isLocal, videoRef, speaking }) {
             <span className="tile-muted"><MicOff size={12} aria-label="muted" /></span>
           )}
         </div>
-        {/* Speaking bars */}
         {speaking && (
           <div className="speaking-bars" aria-hidden>
             {[0,1,2].map(i => (
@@ -72,15 +75,17 @@ function VideoTile({ user, isLocal, videoRef, speaking }) {
   );
 }
 
-// Screen share tile
-function ScreenTile({ track, screenRef }) {
+function ScreenTile({ track }) {
   const containerRef = useRef(null);
 
   useEffect(() => {
-    const el = screenRef?.current || containerRef.current;
-    if (track && el) track.play(el);
-    return () => track?.stop?.();
-  }, [track, screenRef]);
+    if (track && containerRef.current) {
+      track.play(containerRef.current);
+    }
+    return () => {
+      track?.stop?.();
+    };
+  }, [track]);
 
   return (
     <div className="screen-tile">
@@ -96,20 +101,13 @@ function ScreenTile({ track, screenRef }) {
 export function CallView({ agora }) {
   const { currentChannelName, channelUsers, openSettings, setView, addNotification } = useAppStore();
   const localVideoRef = useRef(null);
-  const localScreenRef = useRef(null);
 
-  // Play local video
+  // Play local video into the ref'd element whenever camera turns on
   useEffect(() => {
-    if (agora.cameraEnabled && localVideoRef.current) {
+    if (agora.cameraEnabled && localVideoRef.current && agora.localVideoTrack.current) {
       agora.playLocalVideo(localVideoRef.current);
     }
   }, [agora.cameraEnabled]);
-
-  useEffect(() => {
-    if (agora.screenShareEnabled && localScreenRef.current) {
-      agora.playLocalScreen(localScreenRef.current);
-    }
-  }, [agora.screenShareEnabled]);
 
   const handleLeave = () => {
     agora.leave();
@@ -127,7 +125,10 @@ export function CallView({ agora }) {
   };
 
   const allTiles = [mockLocalUser, ...channelUsers];
-  const gridClass = allTiles.length <= 1 ? 'grid-1' : allTiles.length <= 2 ? 'grid-2' : allTiles.length <= 4 ? 'grid-4' : 'grid-many';
+  const gridClass =
+    allTiles.length <= 1 ? 'grid-1' :
+    allTiles.length <= 2 ? 'grid-2' :
+    allTiles.length <= 4 ? 'grid-4' : 'grid-many';
 
   return (
     <div className="call-view">
@@ -155,18 +156,18 @@ export function CallView({ agora }) {
 
       {/* Video grid */}
       <div className={`video-grid ${gridClass}`}>
-        {/* Screen share — always full width if active */}
+        {/* Screen share */}
         {agora.screenShareEnabled && (
           <div className="screen-share-container">
-            <ScreenTile track={agora.localScreenTrack.current} screenRef={localScreenRef} />
+            <ScreenTile track={agora.localScreenTrack.current} />
           </div>
         )}
 
         {/* Video tiles */}
         <div className={`tiles-container ${agora.screenShareEnabled ? 'with-screen' : ''}`}>
-          {/* Local tile */}
+          {/* Local tile — videoRef is passed so the surface element is the play target */}
           <VideoTile
-            user={{ ...mockLocalUser, videoTrack: agora.localVideoTrack.current }}
+            user={mockLocalUser}
             isLocal={true}
             videoRef={localVideoRef}
             speaking={false}
@@ -192,7 +193,6 @@ export function CallView({ agora }) {
         </div>
 
         <div className="controls-center">
-          {/* Mic */}
           <button
             className={`ctrl-btn ${agora.micEnabled ? 'active' : 'off'}`}
             onClick={agora.toggleMic}
@@ -203,7 +203,6 @@ export function CallView({ agora }) {
             <span className="ctrl-label">{agora.micEnabled ? 'Mic' : 'Muted'}</span>
           </button>
 
-          {/* Camera */}
           <button
             className={`ctrl-btn ${agora.cameraEnabled ? 'active' : ''}`}
             onClick={agora.toggleCamera}
@@ -214,7 +213,6 @@ export function CallView({ agora }) {
             <span className="ctrl-label">Camera</span>
           </button>
 
-          {/* Screen share */}
           <button
             className={`ctrl-btn ${agora.screenShareEnabled ? 'active' : ''}`}
             onClick={agora.toggleScreenShare}
@@ -225,7 +223,6 @@ export function CallView({ agora }) {
             <span className="ctrl-label">Share</span>
           </button>
 
-          {/* Hang up */}
           <button
             className="ctrl-btn end-call"
             onClick={handleLeave}

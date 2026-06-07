@@ -32,11 +32,17 @@ export function Sidebar({ agora }) {
     openSettings, user, channelUsers, currentView,
   } = useAppStore();
 
-  const handleJoinChannel = (id, name) => {
+  const handleJoinChannel = async (id, name) => {
+    // 1. Set the active channel state
     setChannel(id, name);
+    // 2. Switch the UI to the call view
     setView('call');
+    
+    // 3. Trigger the join function from the Agora hook
+    // Note: We only pass the channel ID (name/id).
+    // The hook now handles fetching the token from your Oracle server automatically.
     if (!agora.joined) {
-      agora.join(id);
+      await agora.join(id); 
     }
   };
 

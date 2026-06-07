@@ -14,12 +14,12 @@ const TABS = [
 ];
 
 const BACKGROUNDS = [
-  { id: 'none',   label: 'None',        preview: '#0e0f14' },
-  { id: 'blur',   label: 'Blur',        preview: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)' },
-  { id: 'office', label: 'Office',      preview: 'linear-gradient(135deg, #2c3e50 0%, #3498db 100%)' },
-  { id: 'cafe',   label: 'Café',        preview: 'linear-gradient(135deg, #8B4513 0%, #D2691E 100%)' },
-  { id: 'space',  label: 'Space',       preview: 'linear-gradient(135deg, #0d1117 0%, #1a0533 100%)' },
-  { id: 'beach',  label: 'Beach',       preview: 'linear-gradient(135deg, #00b4db 0%, #f7b731 100%)' },
+  { id: 'none',   label: 'None',   preview: '#0e0f14' },
+  { id: 'blur',   label: 'Blur',   preview: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)' },
+  { id: 'office', label: 'Office', preview: 'linear-gradient(135deg, #2c3e50 0%, #3498db 100%)' },
+  { id: 'cafe',   label: 'Café',   preview: 'linear-gradient(135deg, #8B4513 0%, #D2691E 100%)' },
+  { id: 'space',  label: 'Space',  preview: 'linear-gradient(135deg, #0d1117 0%, #1a0533 100%)' },
+  { id: 'beach',  label: 'Beach',  preview: 'linear-gradient(135deg, #00b4db 0%, #f7b731 100%)' },
 ];
 
 const THEME_OPTIONS = [
@@ -70,12 +70,63 @@ function AudioTab({ agora }) {
   const outOptions = agora.outputDevices.map(d => ({ value: d.deviceId, label: d.label || `Speaker ${d.deviceId.slice(0,6)}` }));
 
   const [testing, setTesting] = useState(false);
+  const [micLevel, setMicLevel] = useState(0);
+  const testStreamRef = useRef(null);
+  const animFrameRef = useRef(null);
+  const analyserRef = useRef(null);
   const audioCtxRef = useRef(null);
 
-  const handleTestMic = () => {
-    setTesting(v => !v);
-    // Real app: toggle audio capture visualization here
+  const stopTest = () => {
+    cancelAnimationFrame(animFrameRef.current);
+    testStreamRef.current?.getTracks().forEach(t => t.stop());
+    audioCtxRef.current?.close();
+    testStreamRef.current = null;
+    analyserRef.current = null;
+    audioCtxRef.current = null;
+    setMicLevel(0);
+    setTesting(false);
   };
+
+  const handleTestMic = async () => {
+    if (testing) {
+      stopTest();
+      return;
+    }
+
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { deviceId: agora.selectedMic ? { exact: agora.selectedMic } : undefined }
+      });
+      testStreamRef.current = stream;
+
+      const audioCtx = new AudioContext();
+      audioCtxRef.current = audioCtx;
+
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+
+      source.connect(analyser);
+      analyser.connect(audioCtx.destination); // plays through speakers
+      analyserRef.current = analyser;
+
+      const data = new Uint8Array(analyser.frequencyBinCount);
+
+      const tick = () => {
+        if (!analyserRef.current) return;
+        analyserRef.current.getByteFrequencyData(data);
+        const avg = data.reduce((a, b) => a + b, 0) / data.length;
+        setMicLevel(Math.min(100, Math.round((avg / 128) * 100)));
+        animFrameRef.current = requestAnimationFrame(tick);
+      };
+      tick();
+      setTesting(true);
+    } catch (err) {
+      console.error('Mic test failed:', err);
+    }
+  };
+
+  useEffect(() => () => stopTest(), []);
 
   return (
     <div className="tab-content">
@@ -99,6 +150,28 @@ function AudioTab({ agora }) {
           onChange={agora.changeMicVolume}
           icon={Mic}
         />
+
+        {testing && (
+          <div style={{ margin: '8px 0' }}>
+            <p className="text-muted text-sm" style={{ marginBottom: 6 }}>
+              Speak into your mic...
+            </p>
+            <div style={{
+              height: 8,
+              borderRadius: 4,
+              background: 'var(--c-surface)',
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                height: '100%',
+                width: `${micLevel}%`,
+                background: micLevel > 70 ? 'var(--c-red)' : micLevel > 40 ? 'var(--c-green)' : 'var(--c-accent)',
+                borderRadius: 4,
+                transition: 'width 0.05s ease',
+              }} />
+            </div>
+          </div>
+        )}
 
         <button className="test-btn" onClick={handleTestMic} aria-pressed={testing}>
           {testing ? '■ Stop test' : '● Test microphone'}
@@ -177,7 +250,9 @@ function VideoTab({ agora }) {
             onChange={agora.switchCamera}
           />
         ) : (
-          <p className="text-muted text-sm" style={{ padding: '8px 0' }}>No camera detected. Grant permissions first.</p>
+          <p className="text-muted text-sm" style={{ padding: '8px 0' }}>
+            No camera detected. Grant permissions first.
+          </p>
         )}
       </div>
 
@@ -185,10 +260,10 @@ function VideoTab({ agora }) {
         <p className="group-label">Video quality</p>
         <SelectBox
           options={[
-            { value: '720p', label: '720p HD — recommended' },
+            { value: '720p',  label: '720p HD — recommended' },
             { value: '1080p', label: '1080p Full HD — high bandwidth' },
-            { value: '480p', label: '480p — low bandwidth' },
-            { value: '360p', label: '360p — very low bandwidth' },
+            { value: '480p',  label: '480p — low bandwidth' },
+            { value: '360p',  label: '360p — very low bandwidth' },
           ]}
           value="720p"
           onChange={() => {}}
@@ -347,7 +422,6 @@ export function SettingsModal({ agora }) {
   return (
     <div className="settings-overlay" ref={overlayRef} onClick={handleOverlayClick} role="dialog" aria-modal aria-label="Settings">
       <div className="settings-modal">
-        {/* Modal header */}
         <div className="modal-header">
           <h2 className="modal-title font-mono">settings</h2>
           <button className="modal-close" onClick={closeSettings} aria-label="Close settings">
@@ -356,7 +430,6 @@ export function SettingsModal({ agora }) {
         </div>
 
         <div className="modal-body">
-          {/* Tab sidebar */}
           <nav className="settings-nav" aria-label="Settings tabs">
             {TABS.map(tab => (
               <button
@@ -371,7 +444,6 @@ export function SettingsModal({ agora }) {
             ))}
           </nav>
 
-          {/* Tab content */}
           <div className="settings-content" key={settingsTab}>
             {tabContent[settingsTab]}
           </div>
