@@ -122,7 +122,7 @@ export function useAgora() {
       setError(null);
       const client = initClient();
 
-      const response = await fetch(`http://163.192.204.48:8080/api/token?channelName=${channel}`);
+      const response = await fetch(`https://api.juno.rest/api/token?channelName=${channel}`);
       if (!response.ok) throw new Error('Network response was not ok');
       const data = await response.json();
 
@@ -242,7 +242,7 @@ export function useAgora() {
         const screenClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
         const currentChannel = clientRef.current._channelName;
 
-        const response = await fetch(`http://163.192.204.48:8080/api/token?channelName=${currentChannel}`);
+        const response = await fetch(`https://api.juno.rest/api/token?channelName=${currentChannel}`);
         const data = await response.json();
 
         await screenClient.join(APP_ID, currentChannel, data.token, null);
