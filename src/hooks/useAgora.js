@@ -3,95 +3,122 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 AgoraRTC.setLogLevel(4);
 
-const APP_ID = import.meta.env.VITE_AGORA_APP_ID || 'YOUR_AGORA_APP_ID';
+const APP_ID      = import.meta.env.VITE_AGORA_APP_ID || 'YOUR_AGORA_APP_ID';
+const BACKEND_URL = 'http://163.192.204.48:8080';
+
+// Screen share UIDs use a fixed high-range prefix so we can reliably identify
+// and filter them. The main client UID is a random low integer assigned by Agora;
+// the screen client UID is always mainUid + 100000. Both must have matching tokens.
+const SCREEN_UID_OFFSET = 100000;
 
 export function useAgora() {
-  // ── ALL refs first, before any useState ──────────────────────────────
-  const clientRef = useRef(null);
+  const clientRef       = useRef(null);
   const screenClientRef = useRef(null);
-  const localAudioTrackRef = useRef(null);
-  const localVideoTrackRef = useRef(null);
+
+  const localAudioTrackRef  = useRef(null);
+  const localVideoTrackRef  = useRef(null);
   const localScreenTrackRef = useRef(null);
 
-  // Mirror refs for values that callbacks need without creating new deps
-  const outputVolumeRef = useRef(100);
-  const localVolumeRef = useRef(80);
-  const selectedMicRef = useRef('');
-  const selectedCameraRef = useRef('');
-  const cameraEnabledRef = useRef(false);
-  const screenShareEnabledRef = useRef(false);
+  // Store our own main UID after join so we can derive the screen share UID
+  const localUidRef            = useRef(null);
+  const screenShareEnabledRef  = useRef(false);
+  const screenClientJoiningRef = useRef(false);
 
-  // ── ALL useState after refs ───────────────────────────────────────────
-  const [joined, setJoined] = useState(false);
-  const [micEnabled, setMicEnabled] = useState(true);
-  const [cameraEnabled, setCameraEnabled] = useState(false);
+  const [joined,             setJoined]             = useState(false);
+  const [isJoining,          setIsJoining]          = useState(false);
+  const [micEnabled,         setMicEnabled]         = useState(true);
+  const [cameraEnabled,      setCameraEnabled]      = useState(false);
   const [screenShareEnabled, setScreenShareEnabled] = useState(false);
-  const [remoteUsers, setRemoteUsers] = useState([]);
-  const [connectionState, setConnectionState] = useState('DISCONNECTED');
-  const [localVolume, setLocalVolume] = useState(80);
-  const [outputVolume, setOutputVolume] = useState(100);
-  const [networkQuality, setNetworkQuality] = useState(null);
-  const [error, setError] = useState(null);
-  const [audioDevices, setAudioDevices] = useState([]);
-  const [videoDevices, setVideoDevices] = useState([]);
-  const [outputDevices, setOutputDevices] = useState([]);
-  const [selectedMic, setSelectedMic] = useState('');
+  const [remoteUsers,        setRemoteUsers]        = useState([]);
+  const [connectionState,    setConnectionState]    = useState('DISCONNECTED');
+  const [localVolume,        setLocalVolume]        = useState(80);
+  const [outputVolume,       setOutputVolume]       = useState(100);
+  const [networkQuality,     setNetworkQuality]     = useState(null);
+  const [error,              setError]              = useState(null);
+
+  const [audioDevices,   setAudioDevices]   = useState([]);
+  const [videoDevices,   setVideoDevices]   = useState([]);
+  const [outputDevices,  setOutputDevices]  = useState([]);
+  const [selectedMic,    setSelectedMic]    = useState('');
   const [selectedCamera, setSelectedCamera] = useState('');
   const [selectedOutput, setSelectedOutput] = useState('');
 
-  // ── Callbacks ─────────────────────────────────────────────────────────
   const applyOutputVolume = useCallback((audioTrack, vol) => {
-    if (audioTrack && typeof audioTrack.setVolume === 'function') {
-      audioTrack.setVolume(vol);
-    }
+    if (audioTrack?.setVolume) audioTrack.setVolume(vol);
   }, []);
+
+  // Returns the screen UID for the current session, or null if not joined yet
+  const getScreenUid = () => {
+    const uid = localUidRef.current;
+    if (uid === null || uid === undefined) return null;
+    return uid + SCREEN_UID_OFFSET;
+  };
 
   const initClient = useCallback(() => {
     if (clientRef.current) return clientRef.current;
 
-    const client = AgoraRTC.createClient({ 
-      mode: 'rtc', 
-      codec: 'vp8'
-    });
+    const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
 
     client.on('user-published', async (user, mediaType) => {
+      // ── CRITICAL FIX ─────────────────────────────────────────────────────────
+      // Skip our own screen-share UID. If the main client tries to subscribe to
+      // its own screen track:
+      //   1. Agora opens a redundant WebSocket → "closed before established" error
+      //   2. The internal renderer hits an uninitialized player object → "Cannot
+      //      read properties of undefined (reading 'current')" crash
+      // We use a FIXED, KNOWN screen UID (localUid + SCREEN_UID_OFFSET) so we can
+      // filter it reliably without waiting for an async uid lookup.
+      const screenUid = getScreenUid();
+      if (screenUid !== null && user.uid === screenUid) return;
+      // ─────────────────────────────────────────────────────────────────────────
+
       await client.subscribe(user, mediaType);
+
       if (mediaType === 'audio') {
         user.audioTrack?.play();
-        applyOutputVolume(user.audioTrack, outputVolumeRef.current);
+        applyOutputVolume(user.audioTrack, outputVolume);
       }
+
       setRemoteUsers(prev => {
         const exists = prev.find(u => u.uid === user.uid);
-        if (exists) return prev.map(u =>
-          u.uid === user.uid ? { ...user, hasAudio: user.hasAudio, hasVideo: user.hasVideo } : u
-        );
-        return [...prev, user];
+        const updated = {
+          uid:        user.uid,
+          hasAudio:   user.hasAudio,
+          hasVideo:   user.hasVideo,
+          videoTrack: user.videoTrack,
+          audioTrack: user.audioTrack,
+        };
+        if (exists) return prev.map(u => u.uid === user.uid ? updated : u);
+        return [...prev, updated];
       });
     });
 
-    client.on('user-unpublished', (user) => {
+    client.on('user-unpublished', (user, mediaType) => {
+      const screenUid = getScreenUid();
+      if (screenUid !== null && user.uid === screenUid) return;
+
       setRemoteUsers(prev =>
         prev.map(u => u.uid === user.uid
-          ? { ...u, hasAudio: user.hasAudio, hasVideo: user.hasVideo }
+          ? { ...u, hasAudio: user.hasAudio, hasVideo: user.hasVideo,
+              videoTrack: mediaType === 'video' ? null : u.videoTrack }
           : u
         )
       );
     });
 
     client.on('user-left', (user) => {
+      const screenUid = getScreenUid();
+      if (screenUid !== null && user.uid === screenUid) return;
       setRemoteUsers(prev => prev.filter(u => u.uid !== user.uid));
     });
 
-    client.on('connection-state-change', (state) => {
-  console.log('Connection state:', state); // add this line
-  setConnectionState(state);
-});
-    client.on('network-quality', (stats) => setNetworkQuality(stats));
-    client.on('exception', (e) => console.warn('Agora exception:', e));
+    client.on('connection-state-change', setConnectionState);
+    client.on('network-quality',         setNetworkQuality);
+    client.on('exception',               (e) => console.warn('Agora exception:', e));
 
     clientRef.current = client;
     return client;
-  }, [applyOutputVolume]);
+  }, [applyOutputVolume, outputVolume]);
 
   const loadDevices = useCallback(async () => {
     try {
@@ -103,224 +130,232 @@ export function useAgora() {
       setAudioDevices(mics);
       setVideoDevices(cams);
       setOutputDevices(outputs);
-      if (mics.length > 0) {
-        setSelectedMic(mics[0].deviceId);
-        selectedMicRef.current = mics[0].deviceId;
-      }
-      if (cams.length > 0) {
-        setSelectedCamera(cams[0].deviceId);
-        selectedCameraRef.current = cams[0].deviceId;
-      }
-      if (outputs.length > 0) setSelectedOutput(outputs[0].deviceId);
+      if (mics.length)    setSelectedMic(mics[0].deviceId);
+      if (cams.length)    setSelectedCamera(cams[0].deviceId);
+      if (outputs.length) setSelectedOutput(outputs[0].deviceId);
     } catch (err) {
       console.error('Failed to load devices:', err);
     }
   }, []);
 
-  const join = useCallback(async (channel, uid = null) => {
+  const join = useCallback(async (channel) => {
+    if (isJoining || clientRef.current?.connectionState === 'CONNECTED') return;
     try {
+      setIsJoining(true);
       setError(null);
       const client = initClient();
 
-      const response = await fetch(`https://api.juno.rest/api/token?channelName=${channel}`);
-      if (!response.ok) throw new Error('Network response was not ok');
-      const data = await response.json();
+      // Fetch token for the main client (no UID specified → server picks one)
+      const resp = await fetch(`${BACKEND_URL}/api/token?channelName=${channel}`);
+      if (!resp.ok) throw new Error('Failed to fetch token.');
+      const { token } = await resp.json();
 
-      await client.join(APP_ID, channel, data.token, uid);
+      // Join and capture the UID Agora assigns us
+      const uid = await client.join(APP_ID, channel, token, null);
+      localUidRef.current = uid;
 
       const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
-        microphoneId: selectedMicRef.current || undefined,
+        microphoneId: selectedMic || undefined,
         encoderConfig: 'high_quality',
       });
       localAudioTrackRef.current = audioTrack;
-      audioTrack.setVolume(localVolumeRef.current);
+      audioTrack.setVolume(localVolume);
       await client.publish(audioTrack);
-      console.log('Audio track created:', audioTrack);
-      console.log('Audio track enabled:', audioTrack.enabled);
-      console.log('Audio track muted:', audioTrack.muted);
-
-      // This will print your mic volume level every second so you can see if signal is coming in
-      setInterval(() => {
-        const level = audioTrack.getVolumeLevel();
-        console.log('Mic volume level:', level); // should go above 0 when you speak
-      }, 1000);
 
       setJoined(true);
       setMicEnabled(true);
     } catch (err) {
-      setError(err.message || 'Failed to join channel');
+      setError(err.message || 'Failed to join');
       console.error('Join failed:', err);
+    } finally {
+      setIsJoining(false);
     }
-  }, [initClient]);
+  }, [initClient, selectedMic, localVolume, isJoining]);
 
   const leave = useCallback(async () => {
-    localAudioTrackRef.current?.close();
-    localVideoTrackRef.current?.close();
-    localScreenTrackRef.current?.close();
-    localAudioTrackRef.current = null;
-    localVideoTrackRef.current = null;
-    localScreenTrackRef.current = null;
-
-    await clientRef.current?.leave();
-    clientRef.current = null;
-    await screenClientRef.current?.leave();
-    screenClientRef.current = null;
-
-    cameraEnabledRef.current = false;
     screenShareEnabledRef.current = false;
+    localUidRef.current           = null;
 
-    setJoined(false);
-    setMicEnabled(true);
-    setCameraEnabled(false);
-    setScreenShareEnabled(false);
-    setRemoteUsers([]);
+    try {
+      if (localScreenTrackRef.current) { localScreenTrackRef.current.close(); localScreenTrackRef.current = null; }
+      if (screenClientRef.current)     { await screenClientRef.current.leave().catch(() => {}); screenClientRef.current = null; }
+      if (localVideoTrackRef.current)  {
+        await clientRef.current?.unpublish(localVideoTrackRef.current).catch(() => {});
+        localVideoTrackRef.current.close(); localVideoTrackRef.current = null;
+      }
+      if (localAudioTrackRef.current)  { localAudioTrackRef.current.close(); localAudioTrackRef.current = null; }
+      await clientRef.current?.leave();
+    } catch (e) { console.error('Leave error:', e); }
+
+    setJoined(false); setMicEnabled(true); setCameraEnabled(false);
+    setScreenShareEnabled(false); setRemoteUsers([]);
   }, []);
 
   const toggleMic = useCallback(async () => {
     const track = localAudioTrackRef.current;
     if (!track) return;
-    const newEnabled = !track.enabled;
-    await track.setEnabled(newEnabled);
-    setMicEnabled(newEnabled);
-  }, []);
+    await track.setEnabled(!micEnabled);
+    setMicEnabled(v => !v);
+  }, [micEnabled]);
 
   const toggleCamera = useCallback(async () => {
-  const client = clientRef.current;
-  console.log('toggleCamera called, cameraEnabledRef:', cameraEnabledRef.current, 'client:', !!client);
-  if (!client) return;
+    const client = clientRef.current;
+    if (!client || client.connectionState !== 'CONNECTED') return;
 
-  if (!cameraEnabledRef.current) {
-    try {
-      console.log('Creating camera track...');
-      const videoTrack = await AgoraRTC.createCameraVideoTrack({
-        cameraId: selectedCameraRef.current || undefined,
-        encoderConfig: { width: 1280, height: 720, frameRate: 30, bitrateMax: 2000 },
-      });
-      console.log('Camera track created:', videoTrack);
-      localVideoTrackRef.current = videoTrack;
-
-      console.log('Publishing camera track...');
-      await client.publish(videoTrack);
-      console.log('Camera track published successfully');
-
-      // Listen for track ending unexpectedly
-      videoTrack.on('track-ended', () => {
-        console.log('Camera track ended unexpectedly!');
-      });
-
-      cameraEnabledRef.current = true;
-      setCameraEnabled(true);
-      console.log('Camera enabled set to true');
-    } catch (err) {
-      console.error('Camera error:', err);
-      setError('Camera access denied');
-    }
-  } else {
-    try {
-      console.log('Disabling camera...');
-      await client.unpublish(localVideoTrackRef.current);
-      localVideoTrackRef.current?.close();
-      localVideoTrackRef.current = null;
-      cameraEnabledRef.current = false;
-      setCameraEnabled(false);
-    } catch (err) {
-      console.error('Camera unpublish error:', err);
-    }
-  }
-}, []);
-
-  const toggleScreenShare = useCallback(async () => {
-    if (!clientRef.current) return;
-
-    if (!screenShareEnabledRef.current) {
+    if (!cameraEnabled) {
       try {
-        const screenTrack = await AgoraRTC.createScreenVideoTrack({
-          encoderConfig: '1080p_1',
-          optimizationMode: 'detail',
-        }, 'disable');
-
-        const screenClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
-        const currentChannel = clientRef.current._channelName;
-
-        const response = await fetch(`https://api.juno.rest/api/token?channelName=${currentChannel}`);
-        const data = await response.json();
-
-        await screenClient.join(APP_ID, currentChannel, data.token, null);
-        await screenClient.publish(screenTrack);
-
-        screenTrack.on('track-ended', () => toggleScreenShare());
-
-        localScreenTrackRef.current = screenTrack;
-        screenClientRef.current = screenClient;
-        screenShareEnabledRef.current = true;
-        setScreenShareEnabled(true);
+        const videoTrack = await AgoraRTC.createCameraVideoTrack({
+          cameraId:      selectedCamera || undefined,
+          encoderConfig: { width: 1280, height: 720, frameRate: 30, bitrateMin: 600, bitrateMax: 1200 },
+        });
+        localVideoTrackRef.current = videoTrack;
+        await client.publish(videoTrack);
+        setCameraEnabled(true);
       } catch (err) {
-        if (err.code !== 'PERMISSION_DENIED') setError('Screen share failed');
+        console.error('Camera failed:', err);
+        setError('Camera access denied or unavailable.');
+        localVideoTrackRef.current?.close();
+        localVideoTrackRef.current = null;
       }
     } else {
-      await screenClientRef.current?.unpublish(localScreenTrackRef.current);
-      localScreenTrackRef.current?.close();
-      localScreenTrackRef.current = null;
-      await screenClientRef.current?.leave();
-      screenClientRef.current = null;
-      screenShareEnabledRef.current = false;
-      setScreenShareEnabled(false);
+      try {
+        if (localVideoTrackRef.current) {
+          await client.unpublish(localVideoTrackRef.current);
+          localVideoTrackRef.current.close();
+          localVideoTrackRef.current = null;
+        }
+        setCameraEnabled(false);
+      } catch (err) { console.error('Unpublish camera failed:', err); }
     }
+  }, [cameraEnabled, selectedCamera]);
+
+  const stopScreenShare = useCallback(async () => {
+    if (!screenShareEnabledRef.current) return;
+    screenShareEnabledRef.current = false;
+    setScreenShareEnabled(false);
+
+    if (screenClientJoiningRef.current) return; // Pipeline will self-clean
+
+    const trackToClose  = localScreenTrackRef.current;
+    const clientToLeave = screenClientRef.current;
+    localScreenTrackRef.current = null;
+    screenClientRef.current     = null;
+
+    try {
+      if (trackToClose)  { await clientToLeave?.unpublish(trackToClose).catch(() => {}); trackToClose.close(); }
+      if (clientToLeave) { await clientToLeave.leave().catch(() => {}); }
+    } catch (e) { console.error('Screen stop error:', e); }
   }, []);
 
-  const changeMicVolume = useCallback((vol) => {
-    localAudioTrackRef.current?.setVolume(vol);
-    localVolumeRef.current = vol;
-    setLocalVolume(vol);
-  }, []);
+  const toggleScreenShare = useCallback(async () => {
+    console.log("screen share button clicked");
+    const client = clientRef.current;
+    if (!client || client.connectionState !== 'CONNECTED') return;
 
+    if (!screenShareEnabledRef.current) {
+      screenShareEnabledRef.current  = true;
+      screenClientJoiningRef.current = true;
+
+      let screenTrack  = null;
+      let screenClient = null;
+
+      try {
+        // Step 1: Browser screen picker (throws PERMISSION_DENIED if cancelled)
+        screenTrack = await AgoraRTC.createScreenVideoTrack(
+          { encoderConfig: '1080p_1', optimizationMode: 'detail' },
+          'disable'
+        );
+        if (!screenShareEnabledRef.current) { screenTrack.close(); screenClientJoiningRef.current = false; return; }
+
+        // Step 2: Compute a fixed screen UID and request a token FOR THAT UID.
+        // This is the root fix — the token must match the UID passed to join().
+        // Passing null UID + a token scoped to uid=0 works on some servers but
+        // fails on others, causing the WebSocket to die mid-handshake.
+        const screenUid     = getScreenUid();
+        const currentChannel = client.channelName;
+
+        // Request a token specifically for the screen UID.
+        // Your backend /api/token endpoint must accept an optional `uid` param.
+        // If it doesn't yet, fall back to a token-less join (works with app-mode
+        // tokens but not with uid-scoped tokens — update your backend if needed).
+        let screenToken = null;
+        try {
+          const resp = await fetch(
+            `${BACKEND_URL}/api/token?channelName=${currentChannel}&uid=${screenUid}`
+          );
+          if (resp.ok) {
+            const data = await resp.json();
+            screenToken = data.token;
+          } else {
+            // Backend doesn't support uid param yet — fall back to unscoped token
+            const resp2 = await fetch(`${BACKEND_URL}/api/token?channelName=${currentChannel}`);
+            if (resp2.ok) { const d = await resp2.json(); screenToken = d.token; }
+          }
+        } catch (tokenErr) {
+          throw new Error('Failed to fetch screen share token');
+        }
+
+        if (!screenShareEnabledRef.current) { screenTrack.close(); screenClientJoiningRef.current = false; return; }
+
+        // Step 3: Join with the FIXED screenUid so our filter in user-published works
+        screenClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
+        await screenClient.join(APP_ID, currentChannel, screenToken, screenUid);
+
+        if (!screenShareEnabledRef.current) {
+          screenTrack.close();
+          await screenClient.leave().catch(() => {});
+          screenClientJoiningRef.current = false;
+          return;
+        }
+
+        await screenClient.publish(screenTrack);
+
+        screenTrack.on('track-ended', () => stopScreenShare());
+
+        localScreenTrackRef.current    = screenTrack;
+        screenClientRef.current        = screenClient;
+        screenClientJoiningRef.current = false;
+        setScreenShareEnabled(true);
+
+      } catch (err) {
+        screenClientJoiningRef.current = false;
+        screenShareEnabledRef.current  = false;
+
+        try { screenTrack?.close(); }         catch {}
+        try { await screenClient?.leave(); }  catch {}
+        localScreenTrackRef.current = null;
+        screenClientRef.current     = null;
+
+        if (err.code !== 'PERMISSION_DENIED') {
+          console.error('Screen share failed:', err);
+          setError('Screen share failed. Please try again.');
+        }
+        setScreenShareEnabled(false);
+      }
+    } else {
+      await stopScreenShare();
+    }
+  }, [stopScreenShare]);
+
+  const changeMicVolume    = useCallback((vol) => { localAudioTrackRef.current?.setVolume(vol); setLocalVolume(vol); }, []);
   const changeOutputVolume = useCallback((vol) => {
-    outputVolumeRef.current = vol;
-    setRemoteUsers(prev => {
-      prev.forEach(user => applyOutputVolume(user.audioTrack, vol));
-      return prev;
-    });
+    setRemoteUsers(prev => { prev.forEach(u => applyOutputVolume(u.audioTrack, vol)); return prev; });
     setOutputVolume(vol);
   }, [applyOutputVolume]);
 
-  const switchMic = useCallback(async (deviceId) => {
-    setSelectedMic(deviceId);
-    selectedMicRef.current = deviceId;
-    if (localAudioTrackRef.current) {
-      await localAudioTrackRef.current.setDevice(deviceId);
-    }
-  }, []);
+  const switchMic    = useCallback(async (id) => { setSelectedMic(id);    if (localAudioTrackRef.current) await localAudioTrackRef.current.setDevice(id); }, []);
+  const switchCamera = useCallback(async (id) => { setSelectedCamera(id); if (localVideoTrackRef.current) await localVideoTrackRef.current.setDevice(id); }, []);
 
-  const switchCamera = useCallback(async (deviceId) => {
-    setSelectedCamera(deviceId);
-    selectedCameraRef.current = deviceId;
-    if (localVideoTrackRef.current) {
-      await localVideoTrackRef.current.setDevice(deviceId);
-    }
-  }, []);
+  const getLocalVideoTrack  = useCallback(() => localVideoTrackRef.current,  []);
+  const getLocalScreenTrack = useCallback(() => localScreenTrackRef.current, []);
 
-  const playLocalVideo = useCallback((element) => {
-    if (localVideoTrackRef.current && element) {
-      localVideoTrackRef.current.play(element);
-    }
-  }, []);
-
-  const playLocalScreen = useCallback((element) => {
-    if (localScreenTrackRef.current && element) {
-      localScreenTrackRef.current.play(element);
-    }
-  }, []);
+  const playLocalVideo  = useCallback((el) => { const t = localVideoTrackRef.current;  if (t && el) try { t.play(el); } catch {} }, []);
+  const playLocalScreen = useCallback((el) => { const t = localScreenTrackRef.current; if (t && el) try { t.play(el); } catch {} }, []);
 
   useEffect(() => {
     loadDevices();
-    return () => {
-      localAudioTrackRef.current?.close();
-      localVideoTrackRef.current?.close();
-      localScreenTrackRef.current?.close();
-      clientRef.current?.leave();
-      screenClientRef.current?.leave();
-    };
-  }, []);
+    return () => { if (clientRef.current?.connectionState === 'CONNECTED') leave(); };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     joined, micEnabled, cameraEnabled, screenShareEnabled,
@@ -328,11 +363,14 @@ export function useAgora() {
     networkQuality, error,
     audioDevices, videoDevices, outputDevices,
     selectedMic, selectedCamera, selectedOutput,
-    join, leave, toggleMic, toggleCamera, toggleScreenShare,
+    join, leave,
+    toggleMic, toggleCamera, toggleScreenShare, stopScreenShare,
     changeMicVolume, changeOutputVolume,
     switchMic, switchCamera, setSelectedOutput,
     playLocalVideo, playLocalScreen,
-    localVideoTrack: localVideoTrackRef,
-    localAudioTrack: localAudioTrackRef,
+    getLocalVideoTrack, getLocalScreenTrack,
+    localVideoTrack:  localVideoTrackRef,
+    localAudioTrack:  localAudioTrackRef,
+    localScreenTrack: localScreenTrackRef,
   };
 }

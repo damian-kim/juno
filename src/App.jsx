@@ -1,4 +1,5 @@
 import './styles/globals.css';
+import { useEffect } from 'react';
 import { useAgora } from './hooks/useAgora';
 import { useAppStore } from './contexts/store';
 import { Sidebar } from './components/Sidebar';
@@ -7,11 +8,14 @@ import { CallView } from './components/CallView';
 import { SettingsModal } from './components/Settings';
 import { Notifications } from './components/Notifications';
 
-console.log("APP.JSX IS LOADING");
-
 export default function App() {
   const agora = useAgora();
-  const { currentView } = useAppStore();
+  const { currentView, initTheme } = useAppStore();
+
+  // Apply stored theme tokens to CSS vars on first mount
+  useEffect(() => {
+    initTheme();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div
@@ -23,10 +27,8 @@ export default function App() {
         position: 'relative',
       }}
     >
-      {/* Sidebar */}
       <Sidebar agora={agora} />
 
-      {/* Main area */}
       <main
         style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         role="main"
@@ -35,7 +37,6 @@ export default function App() {
         {currentView === 'call' && <CallView agora={agora} />}
       </main>
 
-      {/* Modals & overlays */}
       <SettingsModal agora={agora} />
       <Notifications />
     </div>

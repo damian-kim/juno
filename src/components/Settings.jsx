@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   X, Mic, Volume2, Video, Palette, Monitor,
-  ChevronDown, Check
+  ChevronDown, Check, Sun, Moon, Zap, Layers,
+  Type, Circle, Square, Minus
 } from 'lucide-react';
 import { useAppStore } from '../contexts/store';
 import './Settings.css';
@@ -22,13 +23,65 @@ const BACKGROUNDS = [
   { id: 'beach',  label: 'Beach',  preview: 'linear-gradient(135deg, #00b4db 0%, #f7b731 100%)' },
 ];
 
-const THEME_OPTIONS = [
+const ACCENT_OPTIONS = [
   { id: 'violet', label: 'Violet', color: '#7c6dfa' },
   { id: 'cyan',   label: 'Cyan',   color: '#00d2ff' },
   { id: 'green',  label: 'Green',  color: '#3dd68c' },
   { id: 'rose',   label: 'Rose',   color: '#f04d87' },
   { id: 'amber',  label: 'Amber',  color: '#f5a623' },
 ];
+
+const COLOR_MODE_OPTIONS = [
+  {
+    id: 'dark',
+    label: 'Dark',
+    desc: 'Classic dark room',
+    icon: Moon,
+    preview: { bg: '#0e0f14', raised: '#13141b', text: '#e8e9f0', border: '#2a2c3a' },
+  },
+  {
+    id: 'light',
+    label: 'Light',
+    desc: 'Clean & bright',
+    icon: Sun,
+    preview: { bg: '#f0f1f6', raised: '#ffffff', text: '#1a1b2e', border: '#d0d3e4' },
+  },
+  {
+    id: 'oled',
+    label: 'OLED',
+    desc: 'True black',
+    icon: Zap,
+    preview: { bg: '#000000', raised: '#080808', text: '#ffffff', border: '#1e1e1e' },
+  },
+  {
+    id: 'frosted',
+    label: 'Frosted',
+    desc: 'Glass effect',
+    icon: Layers,
+    preview: { bg: '#12131a', raised: 'rgba(255,255,255,0.06)', text: 'rgba(255,255,255,0.92)', border: 'rgba(255,255,255,0.09)' },
+  },
+  {
+    id: 'midnight',
+    label: 'Midnight',
+    desc: 'Deep indigo',
+    icon: Moon,
+    preview: { bg: '#0a0c18', raised: '#0f1120', text: '#d0d4f0', border: '#252840' },
+  },
+];
+
+const RADIUS_OPTIONS = [
+  { id: 'rounded', label: 'Rounded',  Icon: Circle },
+  { id: 'soft',    label: 'Softer',   Icon: Circle },
+  { id: 'sharp',   label: 'Sharp',    Icon: Square },
+];
+
+const FONT_OPTIONS = [
+  { id: 'mono',    label: 'Monospace', sample: 'Aa 12' },
+  { id: 'sans',    label: 'Sans-serif', sample: 'Aa 12' },
+  { id: 'rounded', label: 'Rounded',   sample: 'Aa 12' },
+];
+
+// ─── Sub-components ────────────────────────────────────────────────────────────
 
 function SelectBox({ options, value, onChange, placeholder }) {
   return (
@@ -65,9 +118,11 @@ function VolumeSlider({ label, value, onChange, icon: Icon }) {
   );
 }
 
+// ─── Tabs ──────────────────────────────────────────────────────────────────────
+
 function AudioTab({ agora }) {
-  const micOptions = agora.audioDevices.map(d => ({ value: d.deviceId, label: d.label || `Microphone ${d.deviceId.slice(0,6)}` }));
-  const outOptions = agora.outputDevices.map(d => ({ value: d.deviceId, label: d.label || `Speaker ${d.deviceId.slice(0,6)}` }));
+  const micOptions = agora.audioDevices.map(d => ({ value: d.deviceId, label: d.label || `Microphone ${d.deviceId.slice(0, 6)}` }));
+  const outOptions = agora.outputDevices.map(d => ({ value: d.deviceId, label: d.label || `Speaker ${d.deviceId.slice(0, 6)}` }));
 
   const [testing, setTesting] = useState(false);
   const [micLevel, setMicLevel] = useState(0);
@@ -88,30 +143,20 @@ function AudioTab({ agora }) {
   };
 
   const handleTestMic = async () => {
-    if (testing) {
-      stopTest();
-      return;
-    }
-
+    if (testing) { stopTest(); return; }
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { deviceId: agora.selectedMic ? { exact: agora.selectedMic } : undefined }
       });
       testStreamRef.current = stream;
-
       const audioCtx = new AudioContext();
       audioCtxRef.current = audioCtx;
-
       const source = audioCtx.createMediaStreamSource(stream);
       const analyser = audioCtx.createAnalyser();
       analyser.fftSize = 256;
-
       source.connect(analyser);
-      analyser.connect(audioCtx.destination); // plays through speakers
       analyserRef.current = analyser;
-
       const data = new Uint8Array(analyser.frequencyBinCount);
-
       const tick = () => {
         if (!analyserRef.current) return;
         analyserRef.current.getByteFrequencyData(data);
@@ -133,35 +178,15 @@ function AudioTab({ agora }) {
       <div className="settings-group">
         <p className="group-label">Microphone</p>
         {micOptions.length > 0 ? (
-          <SelectBox
-            options={micOptions}
-            value={agora.selectedMic}
-            onChange={agora.switchMic}
-          />
+          <SelectBox options={micOptions} value={agora.selectedMic} onChange={agora.switchMic} />
         ) : (
-          <p className="text-muted text-sm" style={{ padding: '8px 0' }}>
-            No microphone detected. Grant permissions first.
-          </p>
+          <p className="text-muted text-sm" style={{ padding: '8px 0' }}>No microphone detected. Grant permissions first.</p>
         )}
-
-        <VolumeSlider
-          label="Input volume"
-          value={agora.localVolume}
-          onChange={agora.changeMicVolume}
-          icon={Mic}
-        />
-
+        <VolumeSlider label="Input volume" value={agora.localVolume} onChange={agora.changeMicVolume} icon={Mic} />
         {testing && (
           <div style={{ margin: '8px 0' }}>
-            <p className="text-muted text-sm" style={{ marginBottom: 6 }}>
-              Speak into your mic...
-            </p>
-            <div style={{
-              height: 8,
-              borderRadius: 4,
-              background: 'var(--c-surface)',
-              overflow: 'hidden',
-            }}>
+            <p className="text-muted text-sm" style={{ marginBottom: 6 }}>Speak into your mic...</p>
+            <div style={{ height: 8, borderRadius: 4, background: 'var(--c-bg-overlay)', overflow: 'hidden' }}>
               <div style={{
                 height: '100%',
                 width: `${micLevel}%`,
@@ -172,7 +197,6 @@ function AudioTab({ agora }) {
             </div>
           </div>
         )}
-
         <button className="test-btn" onClick={handleTestMic} aria-pressed={testing}>
           {testing ? '■ Stop test' : '● Test microphone'}
         </button>
@@ -181,78 +205,47 @@ function AudioTab({ agora }) {
       <div className="settings-group">
         <p className="group-label">Speaker / Output</p>
         {outOptions.length > 0 ? (
-          <SelectBox
-            options={outOptions}
-            value={agora.selectedOutput}
-            onChange={agora.setSelectedOutput}
-          />
+          <SelectBox options={outOptions} value={agora.selectedOutput} onChange={agora.setSelectedOutput} />
         ) : (
-          <p className="text-muted text-sm" style={{ padding: '8px 0' }}>
-            Using system default output device.
-          </p>
+          <p className="text-muted text-sm" style={{ padding: '8px 0' }}>Using system default output device.</p>
         )}
-        <VolumeSlider
-          label="Output volume"
-          value={agora.outputVolume}
-          onChange={agora.changeOutputVolume}
-          icon={Volume2}
-        />
+        <VolumeSlider label="Output volume" value={agora.outputVolume} onChange={agora.changeOutputVolume} icon={Volume2} />
       </div>
 
       <div className="settings-group">
         <p className="group-label">Audio processing</p>
-        <div className="toggle-row">
-          <div>
-            <p className="toggle-label">Noise suppression</p>
-            <p className="toggle-desc">Remove background noise with AI</p>
+        {[
+          { label: 'Noise suppression', desc: 'Remove background noise with AI', defaultChecked: true },
+          { label: 'Echo cancellation', desc: 'Prevent speaker feedback loop', defaultChecked: true },
+          { label: 'Auto gain control', desc: 'Normalize microphone volume', defaultChecked: true },
+        ].map(row => (
+          <div key={row.label} className="toggle-row">
+            <div>
+              <p className="toggle-label">{row.label}</p>
+              <p className="toggle-desc">{row.desc}</p>
+            </div>
+            <label className="toggle-switch">
+              <input type="checkbox" defaultChecked={row.defaultChecked} aria-label={row.label} />
+              <span className="toggle-track" />
+            </label>
           </div>
-          <label className="toggle-switch">
-            <input type="checkbox" defaultChecked aria-label="Noise suppression" />
-            <span className="toggle-track" />
-          </label>
-        </div>
-        <div className="toggle-row">
-          <div>
-            <p className="toggle-label">Echo cancellation</p>
-            <p className="toggle-desc">Prevent speaker feedback loop</p>
-          </div>
-          <label className="toggle-switch">
-            <input type="checkbox" defaultChecked aria-label="Echo cancellation" />
-            <span className="toggle-track" />
-          </label>
-        </div>
-        <div className="toggle-row">
-          <div>
-            <p className="toggle-label">Auto gain control</p>
-            <p className="toggle-desc">Normalize microphone volume</p>
-          </div>
-          <label className="toggle-switch">
-            <input type="checkbox" defaultChecked aria-label="Auto gain control" />
-            <span className="toggle-track" />
-          </label>
-        </div>
+        ))}
       </div>
     </div>
   );
 }
 
 function VideoTab({ agora }) {
-  const camOptions = agora.videoDevices.map(d => ({ value: d.deviceId, label: d.label || `Camera ${d.deviceId.slice(0,6)}` }));
+  const camOptions = agora.videoDevices.map(d => ({ value: d.deviceId, label: d.label || `Camera ${d.deviceId.slice(0, 6)}` }));
 
   return (
     <div className="tab-content">
       <div className="settings-group">
         <p className="group-label">Camera</p>
         {camOptions.length > 0 ? (
-          <SelectBox
-            options={camOptions}
-            value={agora.selectedCamera}
-            onChange={agora.switchCamera}
-          />
+          <SelectBox options={camOptions} value={agora.selectedCamera} onChange={agora.switchCamera} />
         ) : (
-          <p className="text-muted text-sm" style={{ padding: '8px 0' }}>
-            No camera detected. Grant permissions first.
-          </p>
+          <p className="text-muted text-sm" style={{ padding: '8px 0' }}>No camera detected. Grant permissions first.</p>
         )}
       </div>
 
@@ -260,8 +253,8 @@ function VideoTab({ agora }) {
         <p className="group-label">Video quality</p>
         <SelectBox
           options={[
-            { value: '720p',  label: '720p HD — recommended' },
             { value: '1080p', label: '1080p Full HD — high bandwidth' },
+            { value: '720p',  label: '720p HD — recommended' },
             { value: '480p',  label: '480p — low bandwidth' },
             { value: '360p',  label: '360p — very low bandwidth' },
           ]}
@@ -272,36 +265,22 @@ function VideoTab({ agora }) {
 
       <div className="settings-group">
         <p className="group-label">Video options</p>
-        <div className="toggle-row">
-          <div>
-            <p className="toggle-label">Mirror my video</p>
-            <p className="toggle-desc">Flip camera for others to see</p>
+        {[
+          { label: 'Mirror my video',  desc: 'Flip camera for others to see',         defaultChecked: true  },
+          { label: 'HD video',         desc: 'Send higher quality video stream',        defaultChecked: true  },
+          { label: 'Low light boost',  desc: 'Brighten camera in dark environments',   defaultChecked: false },
+        ].map(row => (
+          <div key={row.label} className="toggle-row">
+            <div>
+              <p className="toggle-label">{row.label}</p>
+              <p className="toggle-desc">{row.desc}</p>
+            </div>
+            <label className="toggle-switch">
+              <input type="checkbox" defaultChecked={row.defaultChecked} aria-label={row.label} />
+              <span className="toggle-track" />
+            </label>
           </div>
-          <label className="toggle-switch">
-            <input type="checkbox" defaultChecked aria-label="Mirror my video" />
-            <span className="toggle-track" />
-          </label>
-        </div>
-        <div className="toggle-row">
-          <div>
-            <p className="toggle-label">HD video</p>
-            <p className="toggle-desc">Send higher quality video stream</p>
-          </div>
-          <label className="toggle-switch">
-            <input type="checkbox" defaultChecked aria-label="HD video" />
-            <span className="toggle-track" />
-          </label>
-        </div>
-        <div className="toggle-row">
-          <div>
-            <p className="toggle-label">Low light boost</p>
-            <p className="toggle-desc">Brighten camera in dark environments</p>
-          </div>
-          <label className="toggle-switch">
-            <input type="checkbox" aria-label="Low light boost" />
-            <span className="toggle-track" />
-          </label>
-        </div>
+        ))}
       </div>
     </div>
   );
@@ -309,12 +288,11 @@ function VideoTab({ agora }) {
 
 function BackgroundTab() {
   const { videoBackground, setVideoBackground } = useAppStore();
-
   return (
     <div className="tab-content">
       <div className="settings-group">
         <p className="group-label">Virtual background</p>
-        <p className="group-note text-muted text-sm" style={{ marginBottom: 12 }}>
+        <p className="text-muted text-sm" style={{ marginBottom: 12 }}>
           Requires camera to be active. Uses browser-based segmentation.
         </p>
         <div className="background-grid">
@@ -325,15 +303,9 @@ function BackgroundTab() {
               onClick={() => setVideoBackground(bg.id)}
               aria-pressed={videoBackground === bg.id}
             >
-              <div
-                className="bg-preview"
-                style={{ background: bg.preview }}
-                aria-hidden
-              />
+              <div className="bg-preview" style={{ background: bg.preview }} aria-hidden />
               {videoBackground === bg.id && (
-                <div className="bg-check" aria-hidden>
-                  <Check size={12} />
-                </div>
+                <div className="bg-check" aria-hidden><Check size={12} /></div>
               )}
               <span className="bg-label">{bg.label}</span>
             </button>
@@ -345,27 +317,76 @@ function BackgroundTab() {
 }
 
 function ThemeTab() {
-  const { theme, setTheme } = useAppStore();
+  const {
+    colorMode, setColorMode,
+    accent, setAccent,
+    radius, setRadius,
+    font, setFont,
+  } = useAppStore();
 
   return (
     <div className="tab-content">
+
+      {/* ── Color mode ── */}
+      <div className="settings-group">
+        <p className="group-label">Color mode</p>
+        <div className="color-mode-grid">
+          {COLOR_MODE_OPTIONS.map(opt => {
+            const Icon = opt.icon;
+            const active = colorMode === opt.id;
+            return (
+              <button
+                key={opt.id}
+                className={`color-mode-card ${active ? 'selected' : ''}`}
+                onClick={() => setColorMode(opt.id)}
+                aria-pressed={active}
+                title={opt.desc}
+              >
+                <div
+                  className="mode-preview-bg"
+                  style={{ background: opt.preview.bg, border: `1px solid ${opt.preview.border}` }}
+                >
+                  <div className="mode-preview-sidebar" style={{ background: opt.preview.raised }} />
+                  <div className="mode-preview-content">
+                    <div className="mode-preview-bar" style={{ background: opt.preview.raised }} />
+                    <div className="mode-preview-text" style={{ background: opt.preview.text, opacity: 0.8 }} />
+                    <div className="mode-preview-text short" style={{ background: opt.preview.text, opacity: 0.4 }} />
+                  </div>
+                </div>
+                {active && (
+                  <div className="mode-check" aria-hidden>
+                    <Check size={10} />
+                  </div>
+                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 7 }}>
+                  <Icon size={12} aria-hidden style={{ opacity: 0.7 }} />
+                  <span className="mode-label">{opt.label}</span>
+                </div>
+                <span className="mode-desc">{opt.desc}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Accent color ── */}
       <div className="settings-group">
         <p className="group-label">Accent color</p>
         <div className="theme-grid">
-          {THEME_OPTIONS.map(t => (
+          {ACCENT_OPTIONS.map(t => (
             <button
               key={t.id}
-              className={`theme-swatch ${theme === t.id ? 'selected' : ''}`}
-              onClick={() => setTheme(t.id)}
-              aria-pressed={theme === t.id}
-              aria-label={`${t.label} theme`}
+              className={`theme-swatch ${accent === t.id ? 'selected' : ''}`}
+              onClick={() => setAccent(t.id)}
+              aria-pressed={accent === t.id}
+              aria-label={`${t.label} accent`}
             >
               <div
                 className="swatch-circle"
                 style={{ background: t.color, boxShadow: `0 0 12px ${t.color}55` }}
                 aria-hidden
               >
-                {theme === t.id && <Check size={14} color="#fff" aria-hidden />}
+                {accent === t.id && <Check size={14} color="#fff" aria-hidden />}
               </div>
               <span className="swatch-label">{t.label}</span>
             </button>
@@ -373,8 +394,63 @@ function ThemeTab() {
         </div>
       </div>
 
+      {/* ── Corner radius ── */}
       <div className="settings-group">
-        <p className="group-label">Theme preview</p>
+        <p className="group-label">Corner style</p>
+        <div className="radius-grid">
+          {RADIUS_OPTIONS.map(opt => {
+            const { Icon } = opt;
+            const active = radius === opt.id;
+            return (
+              <button
+                key={opt.id}
+                className={`radius-option ${active ? 'selected' : ''}`}
+                onClick={() => setRadius(opt.id)}
+                aria-pressed={active}
+              >
+                <div
+                  className="radius-preview"
+                  style={{
+                    borderRadius: opt.id === 'sharp' ? 3 : opt.id === 'soft' ? 16 : 8,
+                  }}
+                />
+                <span className="radius-label">{opt.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Font ── */}
+      <div className="settings-group">
+        <p className="group-label">Interface font</p>
+        <div className="font-grid">
+          {FONT_OPTIONS.map(opt => {
+            const active = font === opt.id;
+            const families = {
+              mono:    '"JetBrains Mono", monospace',
+              sans:    '"Inter", system-ui, sans-serif',
+              rounded: '"Nunito", "Varela Round", system-ui, sans-serif',
+            };
+            return (
+              <button
+                key={opt.id}
+                className={`font-option ${active ? 'selected' : ''}`}
+                onClick={() => setFont(opt.id)}
+                aria-pressed={active}
+                style={{ fontFamily: families[opt.id] }}
+              >
+                <span className="font-sample" style={{ fontFamily: families[opt.id] }}>Aa</span>
+                <span className="font-label">{opt.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Live preview ── */}
+      <div className="settings-group">
+        <p className="group-label">Preview</p>
         <div className="theme-preview-card">
           <div className="tp-header">
             <div className="tp-dot" style={{ background: 'var(--c-accent)' }} />
@@ -395,6 +471,8 @@ function ThemeTab() {
     </div>
   );
 }
+
+// ─── Modal shell ──────────────────────────────────────────────────────────────
 
 export function SettingsModal({ agora }) {
   const { settingsOpen, settingsTab, closeSettings, setSettingsTab } = useAppStore();
@@ -420,7 +498,14 @@ export function SettingsModal({ agora }) {
   };
 
   return (
-    <div className="settings-overlay" ref={overlayRef} onClick={handleOverlayClick} role="dialog" aria-modal aria-label="Settings">
+    <div
+      className="settings-overlay"
+      ref={overlayRef}
+      onClick={handleOverlayClick}
+      role="dialog"
+      aria-modal
+      aria-label="Settings"
+    >
       <div className="settings-modal">
         <div className="modal-header">
           <h2 className="modal-title font-mono">settings</h2>
