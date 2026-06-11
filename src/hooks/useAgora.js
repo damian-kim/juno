@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 AgoraRTC.setLogLevel(4);
 
 const APP_ID      = import.meta.env.VITE_AGORA_APP_ID || 'YOUR_AGORA_APP_ID';
-const BACKEND_URL = 'http://163.192.204.48:8080';
+const BACKEND_URL = 'https://api.juno.rest';
 
 // Screen share UIDs use a fixed high-range prefix so we can reliably identify
 // and filter them. The main client UID is a random low integer assigned by Agora;
