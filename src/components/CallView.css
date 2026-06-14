@@ -99,7 +99,7 @@
 .grid-size-btn:hover { background: var(--c-bg-hover); color: var(--c-text-primary); }
 .grid-size-btn.active { background: var(--c-accent-dim); color: var(--c-accent); }
 
-/* Grid */
+/* ─── Video grid (flex-based) ──────────────────────────────────────────────── */
 .video-grid {
   flex: 1;
   overflow: hidden;
@@ -114,23 +114,26 @@
   min-height: 0;
 }
 
-.tiles-container {
-  display: grid;
+/* Flex-based tile layout — replaces CSS grid for resizable tiles */
+.tiles-flex {
+  display: flex;
+  flex-direction: column;
   gap: 10px;
-  flex-shrink: 0;
+  flex: 1;
+  min-height: 0;
 }
 
-.tiles-container.with-screen {
-  height: 140px;
-  grid-auto-flow: column;
-  grid-auto-columns: 180px;
-  overflow-x: auto;
+.tiles-flex.with-screen {
+  flex: 0 0 auto;
+  max-height: 160px;
 }
 
-.grid-1 .tiles-container { grid-template-columns: 1fr; height: 100%; flex: 1; }
-.grid-2 .tiles-container { grid-template-columns: 1fr 1fr; height: 100%; flex: 1; }
-.grid-4 .tiles-container { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; height: 100%; flex: 1; }
-.grid-many .tiles-container { grid-template-columns: repeat(3, 1fr); height: 100%; flex: 1; }
+.tiles-row {
+  display: flex;
+  gap: 10px;
+  flex: 1;
+  min-height: 0;
+}
 
 /* ─── Focus mode ────────────────────────────────────────────────────────────── */
 .video-grid.focus-mode {
@@ -159,6 +162,7 @@
   min-width: 160px;
   height: 100px !important;
   min-height: 100px;
+  flex: none !important;
 }
 
 /* ─── Video tile ───────────────────────────────────────────────────────────── */
@@ -168,9 +172,12 @@
   overflow: hidden;
   background: var(--c-bg-raised);
   border: 1.5px solid var(--c-border);
-  transition: border-color var(--t-fast), box-shadow var(--t-fast), opacity var(--t-fast), transform var(--t-fast);
-  min-height: 120px;
+  transition: border-color var(--t-fast), box-shadow var(--t-fast), opacity var(--t-fast);
+  min-height: 100px;
   cursor: grab;
+  /* Fill the flex space */
+  flex: 1;
+  min-width: 0;
 }
 .video-tile:active { cursor: grabbing; }
 
@@ -182,14 +189,13 @@
 /* Drag states */
 .video-tile.dragging {
   opacity: 0.4;
-  transform: scale(0.97);
 }
 .video-tile.drag-over {
   border-color: var(--c-accent);
   box-shadow: 0 0 0 2px var(--c-accent-dim);
 }
 
-/* Drag handle indicator */
+/* Drag handle indicator (top center) */
 .tile-drag-handle {
   position: absolute;
   top: 6px;
@@ -206,18 +212,28 @@
 }
 .video-tile:hover .tile-drag-handle { opacity: 1; }
 
-.video-surface {
+/* ─── Resize handle (bottom-right corner) ──────────────────────────────────── */
+.tile-resize-handle {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  background: var(--c-bg-elevated);
+  bottom: 0;
+  right: 0;
+  width: 20px;
+  height: 20px;
+  z-index: 4;
+  cursor: nwse-resize;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 2px;
+  color: rgba(255,255,255,0.2);
+  opacity: 0;
+  transition: opacity var(--t-fast), color var(--t-fast);
+  /* Prevent the handle from being hidden by overflow:hidden */
+  /* We'll use a pseudo-element to extend the hit area */
 }
-.video-surface video {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover;
-}
+.video-tile:hover .tile-resize-handle { opacity: 1; }
+.tile-resize-handle:hover { color: var(--c-accent); }
+.tile-resize-handle:active { color: var(--c-accent-hover); }
 
 .video-el {
   position: absolute;
@@ -251,15 +267,6 @@
   font-weight: 600;
   position: relative;
   transition: box-shadow var(--t-fast);
-}
-
-.tile-speaking-ring {
-  position: absolute;
-  inset: -5px;
-  border-radius: 50%;
-  border: 2.5px solid;
-  animation: pulse-ring 1.4s ease-out infinite;
-  pointer-events: none;
 }
 
 .avatar-name {
@@ -299,19 +306,6 @@
   align-items: center;
 }
 
-.speaking-bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 2px;
-  height: 14px;
-}
-.speak-bar {
-  width: 3px;
-  background: var(--c-green);
-  border-radius: 2px;
-  animation: speaking-wave 0.7s ease-in-out infinite;
-}
-
 /* ─── Screen share tile ───────────────────────────────────────────────────── */
 .screen-tile {
   width: 100%;
@@ -322,18 +316,6 @@
   border: 1.5px solid var(--c-accent);
   box-shadow: 0 0 0 2px var(--c-accent-dim);
   position: relative;
-}
-
-.screen-surface {
-  width: 100%;
-  height: 100%;
-  position: absolute;
-  inset: 0;
-}
-.screen-surface video {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: contain;
 }
 
 .screen-video-el {
@@ -478,4 +460,12 @@
   animation: fade-in 0.25s ease;
   white-space: nowrap;
   z-index: 50;
+}
+
+/* ─── Reduced motion ──────────────────────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .call-view,
+  .video-tile.dragging,
+  .connecting-badge,
+  .error-toast { animation: none; }
 }

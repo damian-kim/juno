@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { createRoot } from 'react-dom/client';
 import {
   Mic, MicOff, Video, VideoOff, Monitor, MonitorOff,
   PhoneOff, Settings, Maximize, Minimize, Grid2X2,
-  Focus, ExternalLink, Columns3, X, Gamepad2
+  Focus, ExternalLink, Gamepad2
 } from 'lucide-react';
 import { useAppStore } from '../contexts/store';
 import { WordleGame } from './WordleGame';
@@ -24,56 +25,7 @@ function NetQuality({ quality }) {
   );
 }
 
-// ─── Local video tile ──────────────────────────────────────────────────────────
-function LocalVideoTile({ agora, isFocused, onDoubleClick }) {
-  const videoRef = useRef(null);
-  const color = '#7c6dfa';
-
-  useEffect(() => {
-    if (!agora.cameraEnabled) return;
-
-    let attempts = 0;
-    let timeoutId = null;
-    let isMounted = true;
-
-    const tryPlay = () => {
-      if (!isMounted) return;
-      const track = agora.localVideoTrack?.current;
-      if (track && videoRef.current) {
-        try { track.play(videoRef.current); } catch (e) { console.warn('Local video play:', e); }
-        return;
-      }
-      if (attempts++ < 30) timeoutId = setTimeout(tryPlay, 100);
-    };
-    tryPlay();
-
-    return () => {
-      isMounted = false;
-      if (timeoutId) clearTimeout(timeoutId);
-    };
-  }, [agora.cameraEnabled, agora.localVideoTrack]);
-
-  return (
-    <div className={`video-tile ${isFocused ? 'focused' : ''}`} onDoubleClick={onDoubleClick}>
-      <video ref={videoRef} className="video-el" autoPlay muted playsInline
-        style={{ display: agora.cameraEnabled ? 'block' : 'none' }} />
-      {!agora.cameraEnabled && (
-        <div className="video-avatar">
-          <div className="avatar-circle" style={{ background: color + '22', color }}>Y</div>
-          <p className="avatar-name">You</p>
-        </div>
-      )}
-      <div className="tile-overlay">
-        <div className="tile-info">
-          <span className="tile-name">You</span>
-          {!agora.micEnabled && <span className="tile-muted"><MicOff size={12} /></span>}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Remote video tile ─────────────────────────────────────────────────────────
+// ─── Tile colors ───────────────────────────────────────────────────────────────
 const TILE_COLORS = ['#3dd68c', '#00d2ff', '#f04d87', '#f5a623', '#7c6dfa', '#4d9ef0'];
 function hashCode(str) {
   let h = 0;
@@ -81,38 +33,90 @@ function hashCode(str) {
   return h;
 }
 
-function RemoteVideoTile({ user, isFocused, onDoubleClick }) {
+// ─── Video tile with resize handle ─────────────────────────────────────────────
+function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleClick, isFocused, isStrip }) {
   const videoRef = useRef(null);
-  const color = TILE_COLORS[Math.abs(hashCode(String(user.uid))) % TILE_COLORS.length];
-  const label = String(user.uid).slice(0, 6);
+  const isLocal = type === 'local';
+  const color = isLocal
+    ? '#7c6dfa'
+    : TILE_COLORS[Math.abs(hashCode(String(uid))) % TILE_COLORS.length];
+  const label = isLocal ? 'Y' : String(uid).slice(0, 2).toUpperCase();
+  const name = isLocal ? 'You' : `User ${String(uid).slice(0, 6)}`;
+  const hasVideo = isLocal ? agora.cameraEnabled : user?.hasVideo;
+  const isMuted = isLocal ? !agora.micEnabled : !user?.hasAudio;
 
+  // Play video track into the <video> element
   useEffect(() => {
-    if (user.hasVideo && user.videoTrack && videoRef.current) {
-      try { user.videoTrack.play(videoRef.current); } catch (e) { console.warn('Remote video play:', e); }
+    if (!hasVideo || !videoRef.current) return;
+
+    if (isLocal) {
+      let attempts = 0;
+      let timeoutId = null;
+      let isMounted = true;
+      const tryPlay = () => {
+        if (!isMounted) return;
+        const track = agora.localVideoTrack?.current;
+        if (track && videoRef.current) {
+          try { track.play(videoRef.current); } catch {}
+          return;
+        }
+        if (attempts++ < 30) timeoutId = setTimeout(tryPlay, 100);
+      };
+      tryPlay();
+      return () => { isMounted = false; if (timeoutId) clearTimeout(timeoutId); };
+    } else {
+      if (user?.videoTrack && videoRef.current) {
+        try { user.videoTrack.play(videoRef.current); } catch {}
+      }
+      return () => { try { user?.videoTrack?.stop?.(); } catch {} };
     }
-    return () => {
-      try { user.videoTrack?.stop?.(); } catch {}
-    };
-  }, [user.uid, user.hasVideo, user.videoTrack]);
+  }, [hasVideo, isLocal, agora, user]);
+
+  const tileStyle = isStrip ? {} : { flex: flexGrow, minWidth: 0 };
 
   return (
-    <div className={`video-tile ${isFocused ? 'focused' : ''}`} onDoubleClick={onDoubleClick}>
-      <video ref={videoRef} className="video-el" autoPlay playsInline
-        style={{ display: user.hasVideo ? 'block' : 'none' }} />
-      {!user.hasVideo && (
+    <div
+      className={`video-tile ${isFocused ? 'focused' : ''} ${isStrip ? 'strip-tile' : ''}`}
+      style={tileStyle}
+      onDoubleClick={onDoubleClick}
+    >
+      <video
+        ref={videoRef}
+        className="video-el"
+        autoPlay
+        muted={isLocal}
+        playsInline
+        style={{ display: hasVideo ? 'block' : 'none' }}
+      />
+      {!hasVideo && (
         <div className="video-avatar">
-          <div className="avatar-circle" style={{ background: color + '22', color }}>
-            {label.slice(0, 2).toUpperCase()}
-          </div>
-          <p className="avatar-name">User {label}</p>
+          <div className="avatar-circle" style={{ background: color + '22', color }}>{label}</div>
+          <p className="avatar-name">{name}</p>
         </div>
       )}
-      <div className="tile-overlay">
+      <div className="tile-overlay" onDoubleClick={onDoubleClick}>
         <div className="tile-info">
-          <span className="tile-name">User {label}</span>
-          {!user.hasAudio && <span className="tile-muted"><MicOff size={12} /></span>}
+          <span className="tile-name">{name}</span>
+          {isMuted && <span className="tile-muted"><MicOff size={12} /></span>}
         </div>
       </div>
+
+      {/* Resize handle — bottom-right corner */}
+      {!isStrip && (
+        <div
+          className="tile-resize-handle"
+          onMouseDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onResizeStart(uid, e.clientX, flexGrow);
+          }}
+          title="Drag to resize"
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <path d="M9 1L1 9M9 5L5 9M9 9L9 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          </svg>
+        </div>
+      )}
     </div>
   );
 }
@@ -130,50 +134,30 @@ function ScreenTile({ getLocalScreenTrack }) {
 
     const tryBind = () => {
       if (!isMounted || !videoEl) return;
-
-      const agoraTrack = typeof getLocalScreenTrack === 'function'
-        ? getLocalScreenTrack()
-        : null;
-
+      const agoraTrack = typeof getLocalScreenTrack === 'function' ? getLocalScreenTrack() : null;
       if (!agoraTrack) {
         if (attempts++ < 40) timeoutId = setTimeout(tryBind, 100);
         return;
       }
-
       const rawTrack = agoraTrack.getMediaStreamTrack?.();
       if (!rawTrack) {
         if (attempts++ < 40) timeoutId = setTimeout(tryBind, 100);
         return;
       }
-
       videoEl.srcObject = new MediaStream([rawTrack]);
       videoEl.play()
         .then(() => { if (isMounted) setStatus('playing'); })
-        .catch(e => {
-          console.warn('Screen video play blocked:', e);
-          if (isMounted) setStatus('error');
-        });
+        .catch(e => { console.warn('Screen video play blocked:', e); if (isMounted) setStatus('error'); });
     };
 
     tryBind();
-
-    return () => {
-      isMounted = false;
-      if (timeoutId) clearTimeout(timeoutId);
-      if (videoEl) videoEl.srcObject = null;
-    };
+    return () => { isMounted = false; if (timeoutId) clearTimeout(timeoutId); if (videoEl) videoEl.srcObject = null; };
   }, []);
 
   return (
     <div className="screen-tile">
-      <video
-        ref={videoRef}
-        className="screen-video-el"
-        autoPlay
-        muted
-        playsInline
-        style={{ display: status === 'playing' ? 'block' : 'none' }}
-      />
+      <video ref={videoRef} className="screen-video-el" autoPlay muted playsInline
+        style={{ display: status === 'playing' ? 'block' : 'none' }} />
       {status !== 'playing' && (
         <div className="video-avatar">
           <p className="avatar-name" style={{ fontSize: 13 }}>
@@ -193,9 +177,9 @@ function ScreenTile({ getLocalScreenTrack }) {
 function GridSizePicker({ value, onChange }) {
   const options = [
     { val: 'auto', label: 'Auto', icon: Grid2X2 },
-    { val: 1, label: '1', icon: null },
-    { val: 2, label: '2', icon: null },
-    { val: 3, label: '3', icon: null },
+    { val: 1, label: '1' },
+    { val: 2, label: '2' },
+    { val: 3, label: '3' },
   ];
   return (
     <div className="grid-size-picker">
@@ -213,6 +197,152 @@ function GridSizePicker({ value, onChange }) {
   );
 }
 
+// ─── Popout renderer (runs inside the PiP window) ──────────────────────────────
+function PopoutContent({ agora }) {
+  const { currentChannelName, user } = useAppStore();
+  const remoteUsers = agora.remoteUsers;
+
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: 6,
+      height: '100%', padding: 8, boxSizing: 'border-box',
+      background: '#0e0f14', color: '#e8e9f0', fontFamily: 'system-ui, sans-serif', fontSize: 13,
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingBottom: 6, borderBottom: '1px solid #2a2c3a' }}>
+        <span style={{ color: '#7c6dfa', fontWeight: 700 }}>#{currentChannelName}</span>
+        <span style={{ color: '#9496b0', fontSize: 11, marginLeft: 'auto' }}>{remoteUsers.length + 1} in call</span>
+      </div>
+
+      {/* Video grid */}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, flex: 1, overflow: 'auto', alignContent: 'flex-start' }}>
+        {/* Local tile */}
+        <PopoutVideoTile
+          isLocal
+          agora={agora}
+          label={user.avatar || 'Y'}
+          name={user.name}
+          color="#7c6dfa"
+        />
+        {/* Remote tiles */}
+        {remoteUsers.map(u => {
+          const color = TILE_COLORS[Math.abs(hashCode(String(u.uid))) % TILE_COLORS.length];
+          const lbl = String(u.uid).slice(0, 2).toUpperCase();
+          return (
+            <PopoutVideoTile
+              key={u.uid}
+              isLocal={false}
+              user={u}
+              label={lbl}
+              name={`User ${String(u.uid).slice(0, 6)}`}
+              color={color}
+            />
+          );
+        })}
+      </div>
+
+      {/* Controls */}
+      <div style={{ display: 'flex', gap: 6, justifyContent: 'center', paddingTop: 4 }}>
+        <button
+          onClick={() => agora.toggleMic()}
+          style={{
+            padding: '6px 14px', borderRadius: 6, border: '1px solid #2a2c3a', cursor: 'pointer',
+            background: agora.micEnabled ? '#1a1b24' : '#f04d4d22',
+            color: agora.micEnabled ? '#e8e9f0' : '#f04d4d', fontSize: 12,
+          }}
+        >
+          {agora.micEnabled ? '🎙 Mic On' : '🔇 Muted'}
+        </button>
+        <button
+          onClick={() => agora.toggleCamera()}
+          style={{
+            padding: '6px 14px', borderRadius: 6, border: '1px solid #2a2c3a', cursor: 'pointer',
+            background: agora.cameraEnabled ? '#7c6dfa22' : '#1a1b24',
+            color: agora.cameraEnabled ? '#7c6dfa' : '#e8e9f0', fontSize: 12,
+          }}
+        >
+          {agora.cameraEnabled ? '📹 Cam On' : '📷 Cam Off'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function PopoutVideoTile({ isLocal, agora, user, label, name, color }) {
+  const videoRef = useRef(null);
+  const hasVideo = isLocal ? agora.cameraEnabled : user?.hasVideo;
+
+  useEffect(() => {
+    if (!hasVideo || !videoRef.current) return;
+
+    if (isLocal) {
+      let attempts = 0;
+      let tid = null;
+      let mounted = true;
+      const tryPlay = () => {
+        if (!mounted) return;
+        const track = agora.localVideoTrack?.current;
+        if (track && videoRef.current) {
+          try { track.play(videoRef.current); } catch {}
+          return;
+        }
+        if (attempts++ < 30) tid = setTimeout(tryPlay, 100);
+      };
+      tryPlay();
+      return () => { mounted = false; if (tid) clearTimeout(tid); };
+    } else {
+      if (user?.videoTrack && videoRef.current) {
+        try { user.videoTrack.play(videoRef.current); } catch {}
+      }
+      return () => { try { user?.videoTrack?.stop?.(); } catch {} };
+    }
+  }, [hasVideo, isLocal, agora, user]);
+
+  return (
+    <div style={{
+      flex: '1 1 120px', minWidth: 100, aspectRatio: '16/10',
+      background: '#13141b', borderRadius: 8, border: '1px solid #2a2c3a',
+      position: 'relative', overflow: 'hidden',
+    }}>
+      <video
+        ref={videoRef}
+        autoPlay
+        muted={isLocal}
+        playsInline
+        style={{
+          position: 'absolute', inset: 0, width: '100%', height: '100%',
+          objectFit: 'cover', display: hasVideo ? 'block' : 'none',
+        }}
+      />
+      {!hasVideo && (
+        <div style={{
+          position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center', gap: 4,
+        }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: '50%',
+            background: color + '22', color, display: 'flex',
+            alignItems: 'center', justifyContent: 'center', fontSize: 16, fontWeight: 600,
+          }}>
+            {label}
+          </div>
+          <span style={{ fontSize: 11, color: '#9496b0' }}>{name}</span>
+        </div>
+      )}
+      {/* Name overlay */}
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        background: 'linear-gradient(to top, rgba(0,0,0,0.6), transparent)',
+        padding: '12px 6px 4px', display: 'flex', alignItems: 'center', gap: 4,
+      }}>
+        <span style={{ fontSize: 10, fontWeight: 500, color: '#fff', textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
+          {name}
+        </span>
+      </div>
+    </div>
+  );
+}
+
 // ─── CallView ──────────────────────────────────────────────────────────────────
 export function CallView({ agora }) {
   const {
@@ -225,10 +355,14 @@ export function CallView({ agora }) {
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [dragIdx, setDragIdx] = useState(null);
   const [dragOverIdx, setDragOverIdx] = useState(null);
+  const [tileSizes, setTileSizes] = useState({}); // { [uid]: flexGrow }
+  const resizingRef = useRef(null); // { uid, startX, startSize }
   const callViewRef = useRef(null);
   const popoutRef = useRef(null);
+  const popoutRootRef = useRef(null);
 
   const handleLeave = () => {
+    closePopout();
     agora.leave();
     setView('home');
     addNotification('Left the channel');
@@ -260,17 +394,28 @@ export function CallView({ agora }) {
     ...remoteUsers.map(u => ({ type: 'remote', uid: String(u.uid), user: u })),
   ];
 
-  // Apply tile order (swap positions)
+  // Apply tile order
   const orderedTiles = tileOrder.length === allTiles.length
     ? tileOrder.map(i => allTiles[i]).filter(Boolean)
     : allTiles;
 
   // Initialize tile order when tiles change
   useEffect(() => {
-    const newOrder = allTiles.map((_, i) => i);
     if (tileOrder.length !== allTiles.length) {
-      setTileOrder(newOrder);
+      setTileOrder(allTiles.map((_, i) => i));
     }
+  }, [allTiles.length]);
+
+  // Clean up tileSizes when tiles leave
+  useEffect(() => {
+    const validUids = new Set(allTiles.map(t => t.uid));
+    setTileSizes(prev => {
+      const next = {};
+      for (const [k, v] of Object.entries(prev)) {
+        if (validUids.has(k)) next[k] = v;
+      }
+      return next;
+    });
   }, [allTiles.length]);
 
   const totalInCall = remoteUsers.length + 1;
@@ -281,22 +426,52 @@ export function CallView({ agora }) {
     : gridColumns;
 
   const isFocused = focusedUser !== null;
-  const focusedTile = isFocused ? orderedTiles.find((t, i) => {
-    const focusIdx = orderedTiles.findIndex(t2 => {
-      if (focusedUser === '__local__') return t2.uid === '__local__';
-      return String(t2.uid) === String(focusedUser);
-    });
-    return i === focusIdx;
-  }) : null;
+  const focusedTile = isFocused
+    ? orderedTiles.find(t => {
+        if (focusedUser === '__local__') return t.uid === '__local__';
+        return String(t.uid) === String(focusedUser);
+      })
+    : null;
   const stripTiles = isFocused ? orderedTiles.filter(t => t.uid !== focusedUser) : [];
 
-  // Drag handlers
+  // ── Tile resize ──────────────────────────────────────────────────────────────
+  const handleResizeStart = useCallback((uid, startX, startFlex) => {
+    resizingRef.current = { uid, startX, startFlex };
+
+    const handleMove = (e) => {
+      const ref = resizingRef.current;
+      if (!ref) return;
+      const container = callViewRef.current?.querySelector('.tiles-flex');
+      if (!container) return;
+
+      const containerWidth = container.offsetWidth;
+      const dx = e.clientX - ref.startX;
+      // Convert pixel delta to flex-grow delta
+      // Each tile at flex=1 takes (containerWidth / totalTiles) px
+      // So deltaGrow = dx / (containerWidth / totalTiles)
+      const totalTiles = orderedTiles.length;
+      const baseTileWidth = containerWidth / Math.min(totalTiles, effectiveCols);
+      const deltaGrow = dx / baseTileWidth;
+      const newFlex = Math.max(0.3, Math.min(3, ref.startFlex + deltaGrow));
+
+      setTileSizes(prev => ({ ...prev, [ref.uid]: newFlex }));
+    };
+
+    const handleUp = () => {
+      resizingRef.current = null;
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+  }, [orderedTiles.length, effectiveCols]);
+
+  // ── Drag-to-swap ─────────────────────────────────────────────────────────────
   const handleDragStart = (idx) => setDragIdx(idx);
-  const handleDragOver = (e, idx) => { e.preventDefault(); setDragIdx(prev => prev !== null ? prev : null); setDragOverIdx(idx); };
+  const handleDragOver = (e, idx) => { e.preventDefault(); setDragOverIdx(idx); };
   const handleDrop = (idx) => {
-    if (dragIdx !== null && dragIdx !== idx) {
-      swapTiles(dragIdx, idx);
-    }
+    if (dragIdx !== null && dragIdx !== idx) swapTiles(dragIdx, idx);
     setDragIdx(null);
     setDragOverIdx(null);
   };
@@ -304,105 +479,57 @@ export function CallView({ agora }) {
 
   // Focus handler
   const handleFocusToggle = (uid) => {
-    if (focusedUser === uid) {
-      clearFocus();
-    } else {
-      setFocusedUser(uid);
-    }
+    if (focusedUser === uid) clearFocus();
+    else setFocusedUser(uid);
   };
 
-  // Popout
+  // ── Popout (Document PiP with real React + video) ────────────────────────────
   const handlePopout = useCallback(async () => {
     if (popoutActive) return;
 
     try {
-      // Try Document PiP API first (Chrome 116+)
-      if (documentPictureInPicture && typeof documentPictureInPicture.requestWindow === 'function') {
-        const pipWindow = await documentPictureInPicture.requestWindow({ width: 420, height: 320 });
-        popoutRef.current = pipWindow;
+      // @ts-ignore — Document PiP API (Chrome 116+)
+      const pipWindow = await documentPictureInPicture.requestWindow({ width: 480, height: 360 });
+      popoutRef.current = pipWindow;
 
-        pipWindow.document.title = 'Juno — Call Popout';
-        pipWindow.document.body.style.cssText = `
-          margin:0; padding:8px; background:#0e0f14; color:#e8e9f0;
-          font-family:system-ui,sans-serif; font-size:13px;
-          display:flex; flex-direction:column; gap:6px; height:100vh;
-          box-sizing:border-box; overflow:hidden;
-        `;
-
-        // Build a minimal popout UI
-        const renderPopout = () => {
-          const state = useAppStore.getState();
-          const users = agora.remoteUsers;
-          const pipDoc = popoutRef.current?.document;
-          if (!pipDoc) return;
-
-          pipDoc.body.innerHTML = `
-            <div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid #2a2c3a;margin-bottom:6px;">
-              <span style="color:#7c6dfa;font-weight:700;font-size:13px">#${state.currentChannelName}</span>
-              <span style="color:#9496b0;font-size:11px;margin-left:auto">${users.length + 1} in call</span>
-            </div>
-            <div style="display:flex;flex-wrap:wrap;gap:4px;flex:1;overflow:auto;">
-              <div style="flex:1;min-width:80px;aspect-ratio:16/10;background:#13141b;border-radius:8px;border:1px solid #2a2c3a;display:flex;align-items:center;justify-content:center;">
-                <span style="color:#7c6dfa;font-size:18px;font-weight:600">Y</span>
-              </div>
-              ${users.map(u => `
-                <div style="flex:1;min-width:80px;aspect-ratio:16/10;background:#13141b;border-radius:8px;border:1px solid #2a2c3a;display:flex;align-items:center;justify-content:center;">
-                  <span style="color:#3dd68c;font-size:18px;font-weight:600">${String(u.uid).slice(0,2).toUpperCase()}</span>
-                </div>
-              `).join('')}
-            </div>
-            <div style="display:flex;gap:6px;justify-content:center;padding-top:4px;">
-              <button id="pip-mic" style="padding:6px 12px;border-radius:6px;border:1px solid #2a2c3a;background:${state.micEnabled ? '#1a1b24' : '#f04d4d22'};color:${state.micEnabled ? '#e8e9f0' : '#f04d4d'};cursor:pointer;font-size:12px;">
-                ${state.micEnabled ? 'Mic On' : 'Muted'}
-              </button>
-              <button id="pip-leave" style="padding:6px 12px;border-radius:6px;border:1px solid #f04d4d44;background:#f04d4d22;color:#f04d4d;cursor:pointer;font-size:12px;">
-                Leave
-              </button>
-            </div>
-          `;
-
-          // Wire up buttons
-          const micBtn = pipDoc.getElementById('pip-mic');
-          const leaveBtn = pipDoc.getElementById('pip-leave');
-          if (micBtn) micBtn.onclick = () => { agora.toggleMic(); setTimeout(renderPopout, 100); };
-          if (leaveBtn) leaveBtn.onclick = () => { handleLeave(); pipWindow.close(); };
-        };
-
-        renderPopout();
-        // Refresh popout periodically
-        const interval = setInterval(renderPopout, 2000);
-        setPopoutActive(true);
-
-        pipWindow.addEventListener('pagehide', () => {
-          clearInterval(interval);
-          popoutRef.current = null;
-          setPopoutActive(false);
-        });
-
-        return;
+      // Copy stylesheets into the PiP window
+      for (const sheet of document.styleSheets) {
+        try {
+          const clone = sheet.ownerNode.cloneNode(true);
+          pipWindow.document.head.appendChild(clone);
+        } catch {}
       }
 
-      // Fallback: window.open
-      const w = window.open('', 'juno-popout', 'width=420,height=320');
-      if (w) {
-        w.document.title = 'Juno — Call Popout';
-        w.document.body.style.cssText = `
-          margin:0; padding:16px; background:#0e0f14; color:#e8e9f0;
-          font-family:system-ui,sans-serif; font-size:14px;
-          display:flex; align-items:center; justify-content:center;
-        `;
-        w.document.body.innerHTML = '<p>Popout window active — switch tabs to see overlay.</p>';
-        setPopoutActive(true);
-        w.addEventListener('beforeunload', () => setPopoutActive(false));
-      }
+      pipWindow.document.title = 'Juno — Call Popout';
+      pipWindow.document.body.style.cssText = 'margin:0;overflow:hidden;';
+      const rootEl = pipWindow.document.createElement('div');
+      rootEl.style.cssText = 'height:100vh;';
+      pipWindow.document.body.appendChild(rootEl);
+
+      // Create a React root and render the popout content
+      const root = createRoot(rootEl);
+      popoutRootRef.current = root;
+      root.render(<PopoutContent agora={agora} />);
+
+      setPopoutActive(true);
+
+      pipWindow.addEventListener('pagehide', () => {
+        root.unmount();
+        popoutRootRef.current = null;
+        popoutRef.current = null;
+        setPopoutActive(false);
+      });
     } catch (err) {
       console.warn('Popout failed:', err);
       addNotification('Popout not supported in this browser');
     }
   }, [popoutActive, agora, addNotification]);
 
-  // Close popout
   const closePopout = useCallback(() => {
+    if (popoutRootRef.current) {
+      try { popoutRootRef.current.unmount(); } catch {}
+      popoutRootRef.current = null;
+    }
     if (popoutRef.current) {
       try { popoutRef.current.close(); } catch {}
       popoutRef.current = null;
@@ -410,24 +537,15 @@ export function CallView({ agora }) {
     setPopoutActive(false);
   }, []);
 
-  // Cleanup popout on leave
-  useEffect(() => {
-    return () => { closePopout(); };
-  }, []);
+  useEffect(() => () => closePopout(), []);
 
-  // Render a tile with drag support
+  // ── Render a tile ────────────────────────────────────────────────────────────
   const renderTile = (tile, idx, variant = 'main') => {
     const uid = tile.uid;
     const isTileFocused = focusedUser === uid;
-    const tileClasses = [
-      'video-tile',
-      isTileFocused ? 'focused' : '',
-      dragIdx === idx ? 'dragging' : '',
-      dragOverIdx === idx ? 'drag-over' : '',
-      variant === 'strip' ? 'strip-tile' : '',
-    ].filter(Boolean).join(' ');
+    const flexGrow = tileSizes[uid] || 1;
 
-    const commonDrag = {
+    const commonDrag = variant === 'strip' ? {} : {
       draggable: true,
       onDragStart: () => handleDragStart(idx),
       onDragOver: (e) => handleDragOver(e, idx),
@@ -435,22 +553,41 @@ export function CallView({ agora }) {
       onDragEnd: handleDragEnd,
     };
 
-    if (tile.type === 'local') {
-      return (
-        <div key={uid} {...commonDrag} className={tileClasses}>
-          <div className="tile-drag-handle" />
-          <LocalVideoTileInner agora={tile.agora} onDoubleClick={() => handleFocusToggle(uid)} />
-        </div>
-      );
-    }
+    const classes = [
+      'video-tile',
+      isTileFocused ? 'focused' : '',
+      dragIdx === idx ? 'dragging' : '',
+      dragOverIdx === idx ? 'drag-over' : '',
+      variant === 'strip' ? 'strip-tile' : '',
+    ].filter(Boolean).join(' ');
+
+    const style = variant === 'strip' ? {} : { flex: flexGrow, minWidth: 0 };
 
     return (
-      <div key={uid} {...commonDrag} className={tileClasses}>
-        <div className="tile-drag-handle" />
-        <RemoteVideoTileInner user={tile.user} onDoubleClick={() => handleFocusToggle(uid)} />
+      <div key={uid} {...commonDrag} className={classes} style={style}>
+        {variant !== 'strip' && <div className="tile-drag-handle" />}
+        <VideoTile
+          uid={uid}
+          type={tile.type}
+          agora={tile.agora || agora}
+          user={tile.user}
+          flexGrow={flexGrow}
+          onResizeStart={variant === 'strip' ? () => {} : handleResizeStart}
+          onDoubleClick={() => variant !== 'strip' && handleFocusToggle(uid)}
+          isFocused={isTileFocused}
+          isStrip={variant === 'strip'}
+        />
       </div>
     );
   };
+
+  // Rows for the flex grid (split orderedTiles into rows of `effectiveCols`)
+  const rows = [];
+  if (!isFocused && !gameActive) {
+    for (let i = 0; i < orderedTiles.length; i += effectiveCols) {
+      rows.push(orderedTiles.slice(i, i + effectiveCols));
+    }
+  }
 
   return (
     <div className="call-view" ref={callViewRef}>
@@ -499,60 +636,45 @@ export function CallView({ agora }) {
           </div>
           {stripTiles.length > 0 && (
             <div className="focus-strip">
-              {stripTiles.map((t, i) => renderTile(t, orderedTiles.indexOf(t), 'strip'))}
+              {stripTiles.map((t) => renderTile(t, orderedTiles.indexOf(t), 'strip'))}
             </div>
           )}
         </div>
       )}
 
-      {/* Normal grid mode */}
+      {/* Normal grid mode — flex rows */}
       {!isFocused && !gameActive && (
         <div className={`video-grid ${agora.screenShareEnabled ? 'has-screen' : ''}`}>
           {agora.screenShareEnabled && (
             <div className="screen-share-container">
-              <ScreenTile
-                key="screen-tile"
-                getLocalScreenTrack={agora.getLocalScreenTrack}
-              />
+              <ScreenTile key="screen-tile" getLocalScreenTrack={agora.getLocalScreenTrack} />
             </div>
           )}
 
-          <div
-            className={`tiles-container ${agora.screenShareEnabled ? 'with-screen' : ''}`}
-            style={{
-              gridTemplateColumns: agora.screenShareEnabled
-                ? undefined
-                : `repeat(${effectiveCols}, 1fr)`,
-            }}
-          >
-            {orderedTiles.map((tile, idx) => renderTile(tile, idx, 'main'))}
+          <div className={`tiles-flex ${agora.screenShareEnabled ? 'with-screen' : ''}`}>
+            {rows.map((row, ri) => (
+              <div key={ri} className="tiles-row">
+                {row.map((tile, ci) => renderTile(tile, ri * effectiveCols + ci, 'main'))}
+              </div>
+            ))}
           </div>
         </div>
       )}
 
-      {/* Game mode: video strip + game panel */}
+      {/* Game mode */}
       {gameActive && (
         <div className="game-mode">
           <div className="game-video-strip">
-            {orderedTiles.map((tile, idx) => {
-              const uid = tile.uid;
-              if (tile.type === 'local') {
-                return (
-                  <div key={uid} className="video-tile strip-tile compact">
-                    <LocalVideoTileInner agora={tile.agora} onDoubleClick={() => {}} />
-                  </div>
-                );
-              }
-              return (
-                <div key={uid} className="video-tile strip-tile compact">
-                  <RemoteVideoTileInner user={tile.user} onDoubleClick={() => {}} />
-                </div>
-              );
-            })}
+            {orderedTiles.map((tile, idx) => (
+              <div key={tile.uid} className="video-tile strip-tile compact">
+                {tile.type === 'local'
+                  ? <VideoTile uid={tile.uid} type="local" agora={agora} flexGrow={1} onResizeStart={() => {}} onDoubleClick={() => {}} isStrip />
+                  : <VideoTile uid={tile.uid} type="remote" user={tile.user} flexGrow={1} onResizeStart={() => {}} onDoubleClick={() => {}} isStrip />
+                }
+              </div>
+            ))}
           </div>
-          <div className="game-panel">
-            <WordleGame />
-          </div>
+          <div className="game-panel"><WordleGame /></div>
         </div>
       )}
 
@@ -598,82 +720,5 @@ export function CallView({ agora }) {
 
       {agora.error && <div className="error-toast" role="alert">⚠ {agora.error}</div>}
     </div>
-  );
-}
-
-// Inner tile components (used inside draggable wrappers)
-function LocalVideoTileInner({ agora, onDoubleClick }) {
-  const videoRef = useRef(null);
-  const color = '#7c6dfa';
-
-  useEffect(() => {
-    if (!agora.cameraEnabled) return;
-    let attempts = 0;
-    let timeoutId = null;
-    let isMounted = true;
-    const tryPlay = () => {
-      if (!isMounted) return;
-      const track = agora.localVideoTrack?.current;
-      if (track && videoRef.current) {
-        try { track.play(videoRef.current); } catch {}
-        return;
-      }
-      if (attempts++ < 30) timeoutId = setTimeout(tryPlay, 100);
-    };
-    tryPlay();
-    return () => { isMounted = false; if (timeoutId) clearTimeout(timeoutId); };
-  }, [agora.cameraEnabled, agora.localVideoTrack]);
-
-  return (
-    <>
-      <video ref={videoRef} className="video-el" autoPlay muted playsInline
-        style={{ display: agora.cameraEnabled ? 'block' : 'none' }} />
-      {!agora.cameraEnabled && (
-        <div className="video-avatar" onDoubleClick={onDoubleClick}>
-          <div className="avatar-circle" style={{ background: color + '22', color }}>Y</div>
-          <p className="avatar-name">You</p>
-        </div>
-      )}
-      <div className="tile-overlay" onDoubleClick={onDoubleClick}>
-        <div className="tile-info">
-          <span className="tile-name">You</span>
-          {!agora.micEnabled && <span className="tile-muted"><MicOff size={12} /></span>}
-        </div>
-      </div>
-    </>
-  );
-}
-
-function RemoteVideoTileInner({ user, onDoubleClick }) {
-  const videoRef = useRef(null);
-  const color = TILE_COLORS[Math.abs(hashCode(String(user.uid))) % TILE_COLORS.length];
-  const label = String(user.uid).slice(0, 6);
-
-  useEffect(() => {
-    if (user.hasVideo && user.videoTrack && videoRef.current) {
-      try { user.videoTrack.play(videoRef.current); } catch {}
-    }
-    return () => { try { user.videoTrack?.stop?.(); } catch {} };
-  }, [user.uid, user.hasVideo, user.videoTrack]);
-
-  return (
-    <>
-      <video ref={videoRef} className="video-el" autoPlay playsInline
-        style={{ display: user.hasVideo ? 'block' : 'none' }} />
-      {!user.hasVideo && (
-        <div className="video-avatar" onDoubleClick={onDoubleClick}>
-          <div className="avatar-circle" style={{ background: color + '22', color }}>
-            {label.slice(0, 2).toUpperCase()}
-          </div>
-          <p className="avatar-name">User {label}</p>
-        </div>
-      )}
-      <div className="tile-overlay" onDoubleClick={onDoubleClick}>
-        <div className="tile-info">
-          <span className="tile-name">User {label}</span>
-          {!user.hasAudio && <span className="tile-muted"><MicOff size={12} /></span>}
-        </div>
-      </div>
-    </>
   );
 }
