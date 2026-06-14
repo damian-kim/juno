@@ -561,7 +561,12 @@ export function CallView({ agora }) {
       variant === 'strip' ? 'strip-tile' : '',
     ].filter(Boolean).join(' ');
 
-    const style = variant === 'strip' ? {} : { flex: flexGrow, minWidth: 0 };
+    const style = variant === 'strip' ? {} : { 
+      flex: flexGrow, 
+      minWidth: 0,
+      display: 'flex',         // <--- ADD THIS
+      flexDirection: 'column'  // <--- ADD THIS
+    };
 
     return (
       <div key={uid} {...commonDrag} className={classes} style={style}>
