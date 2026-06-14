@@ -1,0 +1,270 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-13T00:00:00Z",
+  "title": "Design System: Wavelength",
+  "extensions": {
+    "colorMeta": {
+      "accent": {
+        "role": "primary",
+        "displayName": "Muted Indigo",
+        "canonical": "oklch(62% 0.12 270)",
+        "tonalRamp": [
+          "oklch(20% 0.08 270)",
+          "oklch(30% 0.10 270)",
+          "oklch(40% 0.11 270)",
+          "oklch(50% 0.12 270)",
+          "oklch(62% 0.12 270)",
+          "oklch(72% 0.10 270)",
+          "oklch(82% 0.07 270)",
+          "oklch(92% 0.04 270)"
+        ]
+      },
+      "bg-base": {
+        "role": "neutral",
+        "displayName": "Void",
+        "canonical": "oklch(10% 0.015 270)",
+        "tonalRamp": [
+          "oklch(5% 0.01 270)",
+          "oklch(10% 0.015 270)",
+          "oklch(15% 0.015 270)",
+          "oklch(20% 0.015 270)",
+          "oklch(30% 0.012 270)",
+          "oklch(40% 0.010 270)",
+          "oklch(50% 0.008 270)",
+          "oklch(60% 0.005 270)"
+        ]
+      },
+      "bg-raised": {
+        "role": "neutral",
+        "displayName": "Surface",
+        "canonical": "oklch(13% 0.015 270)",
+        "tonalRamp": [
+          "oklch(8% 0.01 270)",
+          "oklch(13% 0.015 270)",
+          "oklch(18% 0.015 270)",
+          "oklch(23% 0.015 270)",
+          "oklch(33% 0.012 270)",
+          "oklch(43% 0.010 270)",
+          "oklch(53% 0.008 270)",
+          "oklch(63% 0.005 270)"
+        ]
+      },
+      "bg-elevated": {
+        "role": "neutral",
+        "displayName": "Panel",
+        "canonical": "oklch(17% 0.015 270)",
+        "tonalRamp": [
+          "oklch(12% 0.01 270)",
+          "oklch(17% 0.015 270)",
+          "oklch(22% 0.015 270)",
+          "oklch(27% 0.015 270)",
+          "oklch(37% 0.012 270)",
+          "oklch(47% 0.010 270)",
+          "oklch(57% 0.008 270)",
+          "oklch(67% 0.005 270)"
+        ]
+      },
+      "green": {
+        "role": "semantic",
+        "displayName": "Signal Green",
+        "canonical": "oklch(75% 0.18 155)",
+        "tonalRamp": [
+          "oklch(20% 0.10 155)",
+          "oklch(30% 0.14 155)",
+          "oklch(40% 0.16 155)",
+          "oklch(55% 0.18 155)",
+          "oklch(75% 0.18 155)",
+          "oklch(82% 0.14 155)",
+          "oklch(88% 0.10 155)",
+          "oklch(94% 0.05 155)"
+        ]
+      },
+      "red": {
+        "role": "semantic",
+        "displayName": "Alert Red",
+        "canonical": "oklch(62% 0.22 25)",
+        "tonalRamp": [
+          "oklch(20% 0.12 25)",
+          "oklch(30% 0.16 25)",
+          "oklch(40% 0.20 25)",
+          "oklch(52% 0.22 25)",
+          "oklch(62% 0.22 25)",
+          "oklch(72% 0.18 25)",
+          "oklch(82% 0.12 25)",
+          "oklch(92% 0.06 25)"
+        ]
+      },
+      "yellow": {
+        "role": "semantic",
+        "displayName": "Caution Yellow",
+        "canonical": "oklch(82% 0.16 90)",
+        "tonalRamp": [
+          "oklch(25% 0.10 90)",
+          "oklch(35% 0.12 90)",
+          "oklch(45% 0.14 90)",
+          "oklch(60% 0.16 90)",
+          "oklch(82% 0.16 90)",
+          "oklch(87% 0.12 90)",
+          "oklch(92% 0.08 90)",
+          "oklch(96% 0.04 90)"
+        ]
+      },
+      "blue": {
+        "role": "semantic",
+        "displayName": "Info Blue",
+        "canonical": "oklch(65% 0.15 250)",
+        "tonalRamp": [
+          "oklch(20% 0.10 250)",
+          "oklch(30% 0.12 250)",
+          "oklch(40% 0.14 250)",
+          "oklch(55% 0.15 250)",
+          "oklch(65% 0.15 250)",
+          "oklch(75% 0.12 250)",
+          "oklch(85% 0.08 250)",
+          "oklch(93% 0.04 250)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Space Mono",
+        "purpose": "Brand identity — server name, hero headlines, modal titles. Never for body text."
+      },
+      "body": {
+        "displayName": "DM Sans",
+        "purpose": "All readable text — paragraphs, labels, descriptions, UI copy."
+      }
+    },
+    "shadows": [
+      {
+        "name": "modal-drop",
+        "value": "0 24px 80px rgba(0,0,0,0.6)",
+        "purpose": "Settings modal depth. The only shadow in the system."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-fast",
+        "value": "120ms ease",
+        "purpose": "State transitions — hover, focus, toggle, border-color changes."
+      },
+      {
+        "name": "ease-mid",
+        "value": "220ms ease",
+        "purpose": "Content transitions — tab switches, panel reveals, thumb position."
+      },
+      {
+        "name": "ease-slow",
+        "value": "380ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Entrance animations — fade-in, slide-in, page-level transitions."
+      }
+    ],
+    "breakpoints": []
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main CTA — join channel, confirm action. Pill-shaped with accent glow.",
+      "html": "<button class=\"ds-btn-primary\">Join channel</button>",
+      "css": ".ds-btn-primary { background: #6b7aee; color: #fff; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; padding: 7px 18px; border: none; border-radius: 999px; cursor: pointer; box-shadow: 0 0 14px rgba(107,122,238,0.35); transition: background 120ms ease, box-shadow 120ms ease, transform 120ms ease; } .ds-btn-primary:hover { background: #8b97f2; box-shadow: 0 0 20px rgba(107,122,238,0.35); } .ds-btn-primary:active { transform: scale(0.96); }"
+    },
+    {
+      "name": "Control Button",
+      "kind": "button",
+      "refersTo": "button-control",
+      "description": "In-call controls — mic, camera, screen share. Column layout with icon + label.",
+      "html": "<button class=\"ds-btn-control\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z\"/><path d=\"M19 10v2a7 7 0 0 1-14 0v-2\"/><line x1=\"12\" x2=\"12\" y1=\"19\" y2=\"22\"/></svg><span class=\"ds-ctrl-label\">Mic</span></button>",
+      "css": ".ds-btn-control { display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 8px 14px; border-radius: 10px; color: #9b9db8; font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 500; background: transparent; border: none; cursor: pointer; min-width: 60px; transition: background 120ms ease, color 120ms ease, box-shadow 120ms ease; } .ds-btn-control:hover { background: #1c1f2b; color: #f0f0f8; } .ds-btn-control.ds-active { background: rgba(107,122,238,0.18); color: #6b7aee; box-shadow: 0 0 0 1px rgba(107,122,238,0.35); } .ds-ctrl-label { font-size: 10px; }"
+    },
+    {
+      "name": "Danger Button",
+      "kind": "button",
+      "refersTo": "button-control-danger",
+      "description": "Leave call, destructive actions. Red-dim background, fills to solid red on hover.",
+      "html": "<button class=\"ds-btn-danger\">Leave</button>",
+      "css": ".ds-btn-danger { background: rgba(240,77,77,0.15); color: #f04d4d; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; padding: 7px 18px; border: 1px solid rgba(240,77,77,0.2); border-radius: 999px; cursor: pointer; transition: background 120ms ease, color 120ms ease; } .ds-btn-danger:hover { background: #f04d4d; color: #fff; }"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Standard text input with elevated background and accent focus ring.",
+      "html": "<input class=\"ds-input\" type=\"text\" placeholder=\"Search channels...\" />",
+      "css": ".ds-input { font-family: 'DM Sans', sans-serif; font-size: 14px; color: #f0f0f8; background: #1c1f2b; border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 8px 12px; outline: none; width: 100%; transition: border-color 120ms ease, box-shadow 120ms ease; } .ds-input::placeholder { color: #5c5f7a; } .ds-input:focus { border-color: rgba(107,122,238,0.6); box-shadow: 0 0 0 3px rgba(107,122,238,0.18); }"
+    },
+    {
+      "name": "Toggle Switch",
+      "kind": "custom",
+      "refersTo": "toggle",
+      "description": "Binary setting toggle. Pill track with sliding circle thumb.",
+      "html": "<label class=\"ds-toggle\"><input type=\"checkbox\" checked /><span class=\"ds-toggle-track\"></span></label>",
+      "css": ".ds-toggle { position: relative; width: 38px; height: 22px; cursor: pointer; display: inline-block; } .ds-toggle input { opacity: 0; width: 0; height: 0; position: absolute; } .ds-toggle-track { position: absolute; inset: 0; background: #232638; border-radius: 999px; border: 1px solid rgba(255,255,255,0.07); transition: background 120ms ease, border-color 120ms ease; } .ds-toggle-track::after { content: ''; position: absolute; left: 3px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; border-radius: 50%; background: #5c5f7a; transition: transform 220ms ease, background 120ms ease; } .ds-toggle input:checked + .ds-toggle-track { background: rgba(107,122,238,0.18); border-color: #6b7aee; } .ds-toggle input:checked + .ds-toggle-track::after { transform: translateX(16px) translateY(-50%); background: #6b7aee; box-shadow: 0 0 8px rgba(107,122,238,0.35); }"
+    },
+    {
+      "name": "Channel Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Channel list row with icon, name, member count, and join action.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-card-left\"><div class=\"ds-card-dot\"></div><div><p class=\"ds-card-name\">#general</p><p class=\"ds-card-meta\">3 online</p></div></div><button class=\"ds-card-btn\">Join</button></div>",
+      "css": ".ds-card { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-radius: 14px; background: #14161e; border: 1px solid rgba(255,255,255,0.07); transition: border-color 120ms ease, background 120ms ease; } .ds-card:hover { border-color: rgba(255,255,255,0.14); background: #1c1f2b; } .ds-card-left { display: flex; align-items: center; gap: 12px; } .ds-card-dot { width: 8px; height: 8px; border-radius: 50%; background: #6b7aee; box-shadow: 0 0 6px rgba(107,122,238,0.35); } .ds-card-name { font-family: 'Space Mono', monospace; font-size: 14px; font-weight: 600; color: #f0f0f8; } .ds-card-meta { font-size: 11.5px; color: #3dd68c; margin-top: 1px; } .ds-card-btn { background: #6b7aee; color: #fff; font-family: 'DM Sans', sans-serif; font-size: 13px; font-weight: 600; padding: 7px 18px; border: none; border-radius: 999px; cursor: pointer; box-shadow: 0 0 14px rgba(107,122,238,0.35); transition: background 120ms ease; } .ds-card-btn:hover { background: #8b97f2; }"
+    },
+    {
+      "name": "Badge / Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "Status badge, feature tag, or inline label. Pill-shaped with accent-dim background.",
+      "html": "<span class=\"ds-chip\">Powered by Agora RTC</span>",
+      "css": ".ds-chip { display: inline-flex; align-items: center; gap: 5px; background: rgba(107,122,238,0.18); color: #6b7aee; border: 1px solid rgba(107,122,238,0.35); padding: 4px 12px; border-radius: 999px; font-family: 'DM Sans', sans-serif; font-size: 11px; font-weight: 500; }"
+    },
+    {
+      "name": "Sidebar Navigation",
+      "kind": "nav",
+      "refersTo": "navigation",
+      "description": "Server sidebar with channel list, user bar, and status indicators.",
+      "html": "<aside class=\"ds-sidebar\"><div class=\"ds-sidebar-header\"><div class=\"ds-server-icon\">W</div><div><p class=\"ds-server-name">wavelength</p><p class=\"ds-server-sub">college server</p></div></div><div class=\"ds-sidebar-section\"><p class=\"ds-section-label">Voice Channels</p><button class=\"ds-channel-item ds-active\"><span>#</span><span>general</span></button></div></aside>",
+      "css": ".ds-sidebar { width: 220px; min-width: 220px; height: 100%; background: #14161e; border-right: 1px solid rgba(255,255,255,0.07); display: flex; flex-direction: column; overflow: hidden; font-family: 'DM Sans', sans-serif; } .ds-sidebar-header { display: flex; align-items: center; gap: 10px; padding: 14px 14px 10px; border-bottom: 1px solid rgba(255,255,255,0.07); } .ds-server-icon { width: 34px; height: 34px; border-radius: 10px; background: #6b7aee; display: flex; align-items: center; justify-content: center; font-family: 'Space Mono', monospace; font-size: 16px; font-weight: 700; color: #fff; box-shadow: 0 0 12px rgba(107,122,238,0.35); } .ds-server-name { font-family: 'Space Mono', monospace; font-size: 14px; font-weight: 700; color: #f0f0f8; } .ds-server-sub { font-size: 11px; color: #5c5f7a; } .ds-sidebar-section { padding: 8px 8px 0; } .ds-section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #5c5f7a; padding: 8px 6px 4px; } .ds-channel-item { display: flex; align-items: center; gap: 6px; width: 100%; padding: 5px 8px; border-radius: 6px; color: #9b9db8; font-size: 13.5px; background: transparent; border: none; cursor: pointer; text-align: left; transition: background 120ms ease, color 120ms ease; } .ds-channel-item:hover { background: #1c1f2b; color: #f0f0f8; } .ds-channel-item.ds-active { background: rgba(107,122,238,0.18); color: #f0f0f8; position: relative; } .ds-channel-item.ds-active::before { content: ''; position: absolute; left: 0; top: 4px; bottom: 4px; width: 3px; background: #6b7aee; border-radius: 0 3px 3px 0; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Night Studio",
+    "overview": "Wavelength is a dark space with points of light. The interface is the void — deep, quiet, receding. Accent colors are the signals: they draw attention to what matters (active channels, speaking indicators, control states) and vanish when they don't. The system rejects the corporate SaaS playbook entirely: no meeting schedulers, no enterprise blue-grays, no sterile professionalism. This is a room for gamers, not a conference tool.\n\nThe palette is built on near-black neutrals with cool undertones. The primary accent — a muted indigo — carries the brand identity but is used sparingly, at roughly 10% of any screen. Semantic colors (green for active, red for danger, yellow for caution) are functional, not decorative. The typography pairing of Space Mono (display) and DM Sans (body) creates a technical-but-approachable voice: monospace for identity and labels, humanist sans for readable body text.",
+    "keyCharacteristics": [
+      "Dark-first: the interface lives in darkness; light is earned through accent and state",
+      "Functional color: every color has a job; no decorative fills or gradient backgrounds",
+      "Monospace identity: the brand voice is typographic, not iconographic",
+      "Flat at rest: depth comes from tonal layering (bg-base → bg-raised → bg-elevated), not shadows"
+    ],
+    "rules": [
+      { "name": "The One Accent Rule", "body": "The primary accent (muted indigo) is used on ≤10% of any screen. Its rarity creates focus; overuse destroys it.", "section": "colors" },
+      { "name": "The Tonal Depth Rule", "body": "Depth is conveyed through the five neutral layers (void → surface → panel → overlay → hover), never through drop shadows.", "section": "colors" },
+      { "name": "The Semantic Discipline Rule", "body": "Green/red/yellow/blue are functional signals, not decorative fills.", "section": "colors" },
+      { "name": "The Mono Identity Rule", "body": "Space Mono is the brand voice, not the body voice. It appears in the server name, hero headline, modal titles, and channel names. Never set a paragraph in monospace.", "section": "typography" },
+      { "name": "The Label Restraint Rule", "body": "Uppercase labels are used for section navigation only. Never for emphasis, callouts, or inline annotations.", "section": "typography" },
+      { "name": "The Flat-By-Default Rule", "body": "Surfaces are flat at rest. The only depth signal is the neutral tonal ramp. Shadows are prohibited except for modal overlays.", "section": "elevation" },
+      { "name": "The Glow-Not-Lift Rule", "body": "Interactive feedback uses border-color and box-shadow (accent glow), never translateY or scale transforms on containers.", "section": "elevation" }
+    ],
+    "dos": [
+      "Use the five neutral layers for depth. Every surface should be one of: void, surface, panel, overlay, hover.",
+      "Keep the accent at ≤10% of any screen. Its restraint is the brand.",
+      "Use semantic colors only for their functional purpose (green = online/active, red = error/danger, yellow = warning, blue = info).",
+      "Use Space Mono for brand identity elements and DM Sans for everything readable.",
+      "Use pill radius (999px) for primary CTAs and badges; medium radius (10px) for containers and inputs.",
+      "Animate state changes with the existing transition tokens: fast (120ms), mid (220ms), slow (380ms cubic-bezier 0.16,1,0.3,1).",
+      "Support reduced motion with crossfade or instant alternatives for all animations."
+    ],
+    "donts": [
+      "Use drop shadows for depth. The system is flat; depth is tonal.",
+      "Use the accent color as a background fill. It's a signal, not a surface.",
+      "Use semantic colors decoratively. No green section backgrounds, no red callout boxes.",
+      "Set paragraphs in Space Mono. It's a brand voice, not a body font.",
+      "Use uppercase labels outside of section navigation.",
+      "Add gradient backgrounds, glassmorphism, or blur effects to cards or containers.",
+      "Use corporate SaaS patterns: no meeting schedulers, no enterprise blue-grays, no sterile professional interfaces.",
+      "Use side-stripe borders (border-left > 1px as a colored accent).",
+      "Use gradient text (background-clip: text). Single solid colors only.",
+      "Use the hero-metric template (big number, small label, supporting stats)."
+    ]
+  }
+}
