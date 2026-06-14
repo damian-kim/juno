@@ -1,4 +1,4 @@
-import { Hash, Mic, MicOff, Settings, Users, Volume2, Wifi } from 'lucide-react';
+import { Hash, Mic, MicOff, Settings, Users, Volume2, Wifi, Gamepad2 } from 'lucide-react';
 import { useAppStore } from '../contexts/store';
 import './Sidebar.css';
 
@@ -30,6 +30,7 @@ export function Sidebar({ agora }) {
   const {
     channels, currentChannel, setChannel, setView,
     openSettings, user, channelUsers, currentView,
+    gameActive, gamePlayers, gameStatus, joinGame,
   } = useAppStore();
 
   const handleJoinChannel = async (id, name, type) => {
@@ -93,6 +94,24 @@ export function Sidebar({ agora }) {
       {currentView === 'call' && (
         <div className="sidebar-section active-users">
           <p className="section-label">in voice · {currentChannel || 'general'}</p>
+
+          {/* Game indicator */}
+          {gameActive && (
+            <div className="game-indicator">
+              <div className="game-indicator-left">
+                <Gamepad2 size={13} aria-hidden />
+                <span className="game-indicator-text">
+                  Wordle · {gamePlayers.length} playing
+                </span>
+              </div>
+              {!gamePlayers.find(p => p.name === user.name) && gameStatus === 'playing' && (
+                <button className="game-join-btn" onClick={joinGame}>
+                  Join
+                </button>
+              )}
+            </div>
+          )}
+
           {channelUsers.map(u => (
             <div key={u.uid} className="user-row">
               <div

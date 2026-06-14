@@ -2,9 +2,10 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import {
   Mic, MicOff, Video, VideoOff, Monitor, MonitorOff,
   PhoneOff, Settings, Maximize, Minimize, Grid2X2,
-  Focus, ExternalLink, Columns3, X
+  Focus, ExternalLink, Columns3, X, Gamepad2
 } from 'lucide-react';
 import { useAppStore } from '../contexts/store';
+import { WordleGame } from './WordleGame';
 import './CallView.css';
 
 // ─── Network quality indicator ─────────────────────────────────────────────────
@@ -218,6 +219,7 @@ export function CallView({ agora }) {
     currentChannelName, openSettings, setView, addNotification,
     gridColumns, setGridColumns, focusedUser, setFocusedUser, clearFocus,
     tileOrder, setTileOrder, swapTiles, popoutActive, setPopoutActive,
+    gameActive, gameStatus, gamePlayers, startGame, joinGame, endGame,
   } = useAppStore();
 
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -504,7 +506,7 @@ export function CallView({ agora }) {
       )}
 
       {/* Normal grid mode */}
-      {!isFocused && (
+      {!isFocused && !gameActive && (
         <div className={`video-grid ${agora.screenShareEnabled ? 'has-screen' : ''}`}>
           {agora.screenShareEnabled && (
             <div className="screen-share-container">
@@ -528,6 +530,32 @@ export function CallView({ agora }) {
         </div>
       )}
 
+      {/* Game mode: video strip + game panel */}
+      {gameActive && (
+        <div className="game-mode">
+          <div className="game-video-strip">
+            {orderedTiles.map((tile, idx) => {
+              const uid = tile.uid;
+              if (tile.type === 'local') {
+                return (
+                  <div key={uid} className="video-tile strip-tile compact">
+                    <LocalVideoTileInner agora={tile.agora} onDoubleClick={() => {}} />
+                  </div>
+                );
+              }
+              return (
+                <div key={uid} className="video-tile strip-tile compact">
+                  <RemoteVideoTileInner user={tile.user} onDoubleClick={() => {}} />
+                </div>
+              );
+            })}
+          </div>
+          <div className="game-panel">
+            <WordleGame />
+          </div>
+        </div>
+      )}
+
       <div className="control-bar">
         <div className="controls-left">
           <p className="text-muted text-xs">{totalInCall} in call</p>
@@ -547,6 +575,14 @@ export function CallView({ agora }) {
             onClick={agora.toggleScreenShare} title={agora.screenShareEnabled ? 'Stop sharing' : 'Share screen'}>
             {agora.screenShareEnabled ? <MonitorOff size={20} /> : <Monitor size={20} />}
             <span className="ctrl-label">Share</span>
+          </button>
+          <button
+            className={`ctrl-btn ${gameActive ? 'active' : ''}`}
+            onClick={gameActive ? endGame : startGame}
+            title={gameActive ? 'End game' : 'Start Wordle'}
+          >
+            <Gamepad2 size={20} />
+            <span className="ctrl-label">{gameActive ? 'End' : 'Game'}</span>
           </button>
           <button className="ctrl-btn end-call" onClick={handleLeave} title="Leave">
             <PhoneOff size={20} />

@@ -273,6 +273,94 @@ export const useAppStore = create((set, get) => ({
   popoutActive: false,
   setPopoutActive: (v) => set({ popoutActive: v }),
 
+  // ── Wordle Game ────────────────────────────────────────────────────────────────
+  gameActive: false,
+  gameWord: '',
+  gameGuesses: [],
+  gameStatus: 'idle', // idle | playing | won | lost
+  gamePlayers: [],     // { name, joined }
+  gameMaxGuesses: 6,
+
+  startGame: () => {
+    const words = [
+      'crane', 'slate', 'trace', 'crate', 'arise', 'raise', 'stare', 'later',
+      'alert', 'alter', 'heart', 'earth', 'ocean', 'flame', 'bloom', 'ghost',
+      'charm', 'brave', 'grape', 'shard', 'tiger', 'piano', 'melon', 'cider',
+      'drift', 'plumb', 'globe', 'frost', 'noble', 'spark', 'lunar', 'realm',
+      'quest', 'glyph', 'prism', 'vivid', 'blitz', 'crux', 'flint', 'nexus',
+    ];
+    const word = words[Math.floor(Math.random() * words.length)];
+    set({
+      gameActive: true,
+      gameWord: word,
+      gameGuesses: [],
+      gameStatus: 'playing',
+      gamePlayers: [{ name: get().user.name, joined: true }],
+    });
+  },
+
+  joinGame: () => {
+    const name = get().user.name;
+    set(s => {
+      if (s.gamePlayers.find(p => p.name === name)) return {};
+      return { gamePlayers: [...s.gamePlayers, { name, joined: true }] };
+    });
+  },
+
+  submitGuess: (guess) => {
+    const state = get();
+    if (state.gameStatus !== 'playing') return;
+    if (state.gameGuesses.length >= state.gameMaxGuesses) return;
+
+    const word = state.gameWord.toLowerCase();
+    const g = guess.toLowerCase();
+
+    // Build the result: correct | present | absent for each letter
+    const result = [];
+    const wordArr = word.split('');
+    const guessArr = g.split('');
+    const used = new Array(5).fill(false);
+
+    // First pass: exact matches (green)
+    for (let i = 0; i < 5; i++) {
+      if (guessArr[i] === wordArr[i]) {
+        result[i] = 'correct';
+        used[i] = true;
+      }
+    }
+
+    // Second pass: present (yellow) or absent (gray)
+    for (let i = 0; i < 5; i++) {
+      if (result[i]) continue;
+      const idx = wordArr.findIndex((ch, j) => ch === guessArr[i] && !used[j]);
+      if (idx !== -1) {
+        result[i] = 'present';
+        used[idx] = true;
+      } else {
+        result[i] = 'absent';
+      }
+    }
+
+    const newGuesses = [...state.gameGuesses, { word: g, result }];
+    const won = g === word;
+    const lost = !won && newGuesses.length >= state.gameMaxGuesses;
+
+    set({
+      gameGuesses: newGuesses,
+      gameStatus: won ? 'won' : lost ? 'lost' : 'playing',
+    });
+  },
+
+  endGame: () => {
+    set({
+      gameActive: false,
+      gameWord: '',
+      gameGuesses: [],
+      gameStatus: 'idle',
+      gamePlayers: [],
+    });
+  },
+
   // ── Settings ─────────────────────────────────────────────────────────────────
   settingsOpen: false,
   settingsTab: 'audio',
