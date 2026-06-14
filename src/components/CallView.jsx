@@ -564,8 +564,6 @@ export function CallView({ agora }) {
     const style = variant === 'strip' ? {} : { 
       flex: flexGrow, 
       minWidth: 0,
-      display: 'flex',         // <--- ADD THIS
-      flexDirection: 'column'  // <--- ADD THIS
     };
 
     return (
