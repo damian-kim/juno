@@ -8,7 +8,7 @@ function ChannelItem({ channel, active, onJoin }) {
   return (
     <button
       className={`channel-item ${active ? 'active' : ''}`}
-      onClick={() => onJoin(channel.id, channel.name)}
+      onClick={() => onJoin(channel.id, channel.name, channel.type)}
     >
       {channel.type === 'voice' ? (
         <Volume2 size={15} aria-hidden />
@@ -32,17 +32,18 @@ export function Sidebar({ agora }) {
     openSettings, user, channelUsers, currentView,
   } = useAppStore();
 
-  const handleJoinChannel = async (id, name) => {
-    // 1. Set the active channel state
+  const handleJoinChannel = async (id, name, type) => {
     setChannel(id, name);
-    // 2. Switch the UI to the call view
+
+    if (type === 'text') {
+      setView('text');
+      return;
+    }
+
+    // Voice channel — join the Agora call
     setView('call');
-    
-    // 3. Trigger the join function from the Agora hook
-    // Note: We only pass the channel ID (name/id).
-    // The hook now handles fetching the token from your Oracle server automatically.
     if (!agora.joined) {
-      await agora.join(id); 
+      await agora.join(id);
     }
   };
 

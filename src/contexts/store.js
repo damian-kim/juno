@@ -219,11 +219,59 @@ export const useAppStore = create((set, get) => ({
     { id: 'announcements', name: 'announcements', type: 'text',  members: 0 },
   ],
 
-  channelUsers: [
-    { uid: 'alice', name: 'Alice K.', avatar: 'A', speaking: false, muted: false, hasVideo: false, color: '#7c6dfa' },
-    { uid: 'bob',   name: 'Bob T.',   avatar: 'B', speaking: true,  muted: false, hasVideo: true,  color: '#3dd68c' },
-    { uid: 'carla', name: 'Carla M.', avatar: 'C', speaking: false, muted: true,  hasVideo: false, color: '#f04d87' },
-  ],
+  channelUsers: [],
+
+  // ── Text channel messages ──────────────────────────────────────────────────────
+  messages: {},
+  sendMessage: (channelId, text) => {
+    const id = Date.now() + Math.random();
+    const author = get().user.name;
+    set(s => ({
+      messages: {
+        ...s.messages,
+        [channelId]: [...(s.messages[channelId] || []), { id, channelId, author, text, timestamp: Date.now(), edited: false }],
+      },
+    }));
+  },
+  deleteMessage: (channelId, msgId) => {
+    set(s => ({
+      messages: {
+        ...s.messages,
+        [channelId]: (s.messages[channelId] || []).filter(m => m.id !== msgId),
+      },
+    }));
+  },
+  editMessage: (channelId, msgId, newText) => {
+    set(s => ({
+      messages: {
+        ...s.messages,
+        [channelId]: (s.messages[channelId] || []).map(m => m.id === msgId ? { ...m, text: newText, edited: true } : m),
+      },
+    }));
+  },
+
+  // ── Grid customization ─────────────────────────────────────────────────────────
+  gridColumns: 'auto',
+  setGridColumns: (n) => set({ gridColumns: n }),
+  focusedUser: null,
+  setFocusedUser: (uid) => set({ focusedUser: uid }),
+  clearFocus: () => set({ focusedUser: null }),
+  tileOrder: [],
+  setTileOrder: (order) => set({ tileOrder: order }),
+  swapTiles: (fromIdx, toIdx) => {
+    set(s => {
+      const order = [...(s.tileOrder.length ? s.tileOrder : [])];
+      if (!order.length) return {};
+      const temp = order[fromIdx];
+      order[fromIdx] = order[toIdx];
+      order[toIdx] = temp;
+      return { tileOrder: order };
+    });
+  },
+
+  // ── Popout ─────────────────────────────────────────────────────────────────────
+  popoutActive: false,
+  setPopoutActive: (v) => set({ popoutActive: v }),
 
   // ── Settings ─────────────────────────────────────────────────────────────────
   settingsOpen: false,

@@ -5,6 +5,7 @@ import { useAppStore } from './contexts/store';
 import { Sidebar } from './components/Sidebar';
 import { HomeView } from './components/HomeView';
 import { CallView } from './components/CallView';
+import { TextChannel } from './components/TextChannel';
 import { SettingsModal } from './components/Settings';
 import { Notifications } from './components/Notifications';
 
@@ -35,6 +36,7 @@ export default function App() {
       >
         {currentView === 'home' && <HomeView agora={agora} />}
         {currentView === 'call' && <CallView agora={agora} />}
+        {currentView === 'text' && <TextChannel />}
       </main>
 
       <SettingsModal agora={agora} />

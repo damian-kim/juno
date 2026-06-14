@@ -22,7 +22,7 @@
 .call-header-left, .call-header-right {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
 }
 
 .channel-indicator {
@@ -72,6 +72,32 @@
   transition: background var(--t-fast), color var(--t-fast);
 }
 .header-btn:hover { background: var(--c-bg-elevated); color: var(--c-text-primary); }
+.header-btn.active { background: var(--c-accent-dim); color: var(--c-accent); }
+
+/* Grid size picker */
+.grid-size-picker {
+  display: flex;
+  gap: 2px;
+  background: var(--c-bg-elevated);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  padding: 2px;
+}
+
+.grid-size-btn {
+  width: 28px;
+  height: 26px;
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--c-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.grid-size-btn:hover { background: var(--c-bg-hover); color: var(--c-text-primary); }
+.grid-size-btn.active { background: var(--c-accent-dim); color: var(--c-accent); }
 
 /* Grid */
 .video-grid {
@@ -106,48 +132,102 @@
 .grid-4 .tiles-container { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; height: 100%; flex: 1; }
 .grid-many .tiles-container { grid-template-columns: repeat(3, 1fr); height: 100%; flex: 1; }
 
-/* ─── Video tile ─────────────────────────────────────────────────────────────
-   FIX: The tile is position:relative. The video-surface fills it completely
-   via position:absolute inset:0. The avatar overlay ALSO sits inset:0 on top
-   of the video surface (pointer-events:none so it doesn't block video controls).
-   The tile-overlay gradient is z-index:2, always on top.
-────────────────────────────────────────────────────────────────────────────── */
+/* ─── Focus mode ────────────────────────────────────────────────────────────── */
+.video-grid.focus-mode {
+  flex-direction: column;
+}
 
+.focus-main {
+  flex: 1;
+  min-height: 0;
+}
+.focus-main .video-tile {
+  width: 100%;
+  height: 100%;
+}
+
+.focus-strip {
+  display: flex;
+  gap: 8px;
+  padding: 8px 0 0;
+  overflow-x: auto;
+  flex-shrink: 0;
+}
+
+.strip-tile {
+  width: 160px !important;
+  min-width: 160px;
+  height: 100px !important;
+  min-height: 100px;
+}
+
+/* ─── Video tile ───────────────────────────────────────────────────────────── */
 .video-tile {
   position: relative;
   border-radius: var(--r-lg);
   overflow: hidden;
   background: var(--c-bg-raised);
   border: 1.5px solid var(--c-border);
-  transition: border-color var(--t-fast), box-shadow var(--t-fast);
-  /* Ensure the tile has a real height even without explicit height set */
+  transition: border-color var(--t-fast), box-shadow var(--t-fast), opacity var(--t-fast), transform var(--t-fast);
   min-height: 120px;
+  cursor: grab;
 }
+.video-tile:active { cursor: grabbing; }
 
 .video-tile.speaking {
   border-color: var(--c-green);
   box-shadow: 0 0 0 2px var(--c-green-dim), inset 0 0 0 1px var(--c-green);
 }
 
-/* FIX: video-surface is always rendered, absolutely positioned to fill tile.
-   Agora plays the video track directly into this div element. */
+/* Drag states */
+.video-tile.dragging {
+  opacity: 0.4;
+  transform: scale(0.97);
+}
+.video-tile.drag-over {
+  border-color: var(--c-accent);
+  box-shadow: 0 0 0 2px var(--c-accent-dim);
+}
+
+/* Drag handle indicator */
+.tile-drag-handle {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 24px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255,255,255,0.15);
+  z-index: 3;
+  opacity: 0;
+  transition: opacity var(--t-fast);
+  pointer-events: none;
+}
+.video-tile:hover .tile-drag-handle { opacity: 1; }
+
 .video-surface {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   background: var(--c-bg-elevated);
-  /* The Agora SDK injects a <video> element as a child of this div */
 }
-
-/* Ensure Agora-injected video element fills the container */
 .video-surface video {
   width: 100% !important;
   height: 100% !important;
   object-fit: cover;
 }
 
-/* Avatar shown when no video — sits above video-surface via z-index */
+.video-el {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  background: var(--c-bg-elevated);
+}
+
 .video-avatar {
   position: absolute;
   inset: 0;
@@ -187,7 +267,6 @@
   color: var(--c-text-secondary);
 }
 
-/* Tile overlay — always on top (z-index:2) */
 .tile-overlay {
   position: absolute;
   inset: 0;
@@ -199,6 +278,7 @@
   background: linear-gradient(to top, rgba(0,0,0,0.55) 0%, transparent 45%);
   pointer-events: none;
 }
+.tile-overlay > * { pointer-events: auto; }
 
 .tile-info {
   display: flex;
@@ -219,7 +299,6 @@
   align-items: center;
 }
 
-/* Speaking bars */
 .speaking-bars {
   display: flex;
   align-items: flex-end;
@@ -234,7 +313,6 @@
 }
 
 /* ─── Screen share tile ───────────────────────────────────────────────────── */
-
 .screen-tile {
   width: 100%;
   height: 100%;
@@ -252,12 +330,19 @@
   position: absolute;
   inset: 0;
 }
-
-/* Agora-injected video inside screen surface */
 .screen-surface video {
   width: 100% !important;
   height: 100% !important;
-  object-fit: contain; /* contain so no cropping of shared screen */
+  object-fit: contain;
+}
+
+.screen-video-el {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
 }
 
 .screen-badge {
@@ -280,7 +365,6 @@
 }
 
 /* ─── Control bar ─────────────────────────────────────────────────────────── */
-
 .control-bar {
   display: flex;
   align-items: center;
@@ -347,7 +431,6 @@
 .ctrl-btn-sm:hover { background: var(--c-bg-elevated); color: var(--c-text-primary); }
 
 /* ─── Error toast ─────────────────────────────────────────────────────────── */
-
 .error-toast {
   position: absolute;
   bottom: 80px;

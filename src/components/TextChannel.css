@@ -1,0 +1,212 @@
+.text-channel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--c-bg-base);
+  overflow: hidden;
+  animation: fade-in 0.25s ease;
+}
+
+.text-channel-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--c-border);
+  background: var(--c-bg-raised);
+  color: var(--c-text-secondary);
+  flex-shrink: 0;
+}
+
+/* Message list */
+.msg-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.msg-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--c-text-muted);
+  font-size: 15px;
+  padding: 40px 0;
+}
+
+/* Message bubble */
+.msg-bubble {
+  position: relative;
+  padding: 8px 12px;
+  border-radius: var(--r-md);
+  background: var(--c-bg-raised);
+  border: 1px solid var(--c-border);
+  max-width: 85%;
+  transition: background var(--t-fast);
+}
+.msg-bubble:hover {
+  background: var(--c-bg-elevated);
+}
+.msg-bubble:hover .msg-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+.msg-bubble.own {
+  align-self: flex-end;
+  border-color: var(--c-accent-dim);
+}
+
+.msg-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 3px;
+}
+
+.msg-author {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--c-accent);
+}
+
+.msg-time {
+  font-size: 10.5px;
+  color: var(--c-text-muted);
+}
+
+.msg-edited-tag {
+  font-size: 10px;
+  color: var(--c-text-muted);
+  font-style: italic;
+}
+
+.msg-text {
+  font-size: 13.5px;
+  color: var(--c-text-primary);
+  line-height: 1.55;
+  word-break: break-word;
+}
+
+/* Hover actions */
+.msg-actions {
+  position: absolute;
+  top: -10px;
+  right: 8px;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--t-fast);
+  background: var(--c-bg-overlay);
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-sm);
+  padding: 2px;
+}
+
+.msg-action-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: var(--r-sm);
+  color: var(--c-text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.msg-action-btn:hover {
+  background: var(--c-bg-hover);
+  color: var(--c-text-primary);
+}
+.msg-action-btn.danger:hover {
+  background: var(--c-red-dim);
+  color: var(--c-red);
+}
+.msg-action-btn.save {
+  color: var(--c-green);
+}
+.msg-action-btn.save:hover {
+  background: var(--c-green-dim);
+}
+.msg-action-btn.cancel:hover {
+  background: var(--c-red-dim);
+  color: var(--c-red);
+}
+
+/* Edit mode */
+.msg-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.msg-edit-input {
+  flex: 1;
+  font-size: 13px;
+  padding: 6px 10px;
+  border-radius: var(--r-sm);
+  background: var(--c-bg-base);
+  border: 1px solid var(--c-border-focus);
+  color: var(--c-text-primary);
+  resize: none;
+  outline: none;
+  font-family: var(--font-body);
+  line-height: 1.4;
+  min-height: 32px;
+}
+
+/* Input bar */
+.msg-input-bar {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--c-border);
+  background: var(--c-bg-raised);
+  flex-shrink: 0;
+}
+
+.msg-input {
+  flex: 1;
+  font-size: 13.5px;
+  padding: 10px 14px;
+  border-radius: var(--r-md);
+  background: var(--c-bg-elevated);
+  border: 1px solid var(--c-border);
+  color: var(--c-text-primary);
+  resize: none;
+  outline: none;
+  font-family: var(--font-body);
+  line-height: 1.4;
+  min-height: 40px;
+  max-height: 120px;
+  transition: border-color var(--t-fast);
+}
+.msg-input:focus {
+  border-color: var(--c-border-focus);
+}
+.msg-input::placeholder {
+  color: var(--c-text-muted);
+}
+
+.msg-send-btn {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r-md);
+  background: var(--c-accent);
+  color: #fff;
+  flex-shrink: 0;
+  transition: background var(--t-fast), opacity var(--t-fast);
+}
+.msg-send-btn:hover {
+  background: var(--c-accent-hover);
+}
+.msg-send-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
