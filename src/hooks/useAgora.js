@@ -95,8 +95,8 @@ export function useAgora() {
     });
 
     client.on('user-unpublished', (user, mediaType) => {
-      const screenUid = getScreenUid();
-      if (screenUid !== null && user.uid === screenUid) return;
+      // NOTE: Do NOT filter out screen share UIDs here — we need to track
+      // when remote screen shares stop publishing so the UI updates properly.
 
       setRemoteUsers(prev =>
         prev.map(u => u.uid === user.uid
@@ -108,8 +108,8 @@ export function useAgora() {
     });
 
     client.on('user-left', (user) => {
-      const screenUid = getScreenUid();
-      if (screenUid !== null && user.uid === screenUid) return;
+      // NOTE: Do NOT filter out screen share UIDs here — when a remote screen
+      // share client leaves, we need to remove its tile from the UI.
       setRemoteUsers(prev => prev.filter(u => u.uid !== user.uid));
     });
 
@@ -178,8 +178,9 @@ export function useAgora() {
     localUidRef.current           = null;
 
     try {
-      if (localScreenTrackRef.current) { localScreenTrackRef.current.close(); localScreenTrackRef.current = null; }
-      if (screenClientRef.current)     { await screenClientRef.current.leave().catch(() => {}); screenClientRef.current = null; }
+      if (localScreenTrackRef.current)      { localScreenTrackRef.current.close(); localScreenTrackRef.current = null; }
+      if (localScreenAudioTrackRef.current) { localScreenAudioTrackRef.current.close(); localScreenAudioTrackRef.current = null; }
+      if (screenClientRef.current)          { await screenClientRef.current.leave().catch(() => {}); screenClientRef.current = null; }
       if (localVideoTrackRef.current)  {
         await clientRef.current?.unpublish(localVideoTrackRef.current).catch(() => {});
         localVideoTrackRef.current.close(); localVideoTrackRef.current = null;
@@ -237,13 +238,20 @@ export function useAgora() {
 
     if (screenClientJoiningRef.current) return; // Pipeline will self-clean
 
-    const trackToClose  = localScreenTrackRef.current;
+    const videoTrack    = localScreenTrackRef.current;
+    const audioTrack    = localScreenAudioTrackRef.current;
     const clientToLeave = screenClientRef.current;
-    localScreenTrackRef.current = null;
-    screenClientRef.current     = null;
+    localScreenTrackRef.current      = null;
+    localScreenAudioTrackRef.current = null;
+    screenClientRef.current          = null;
 
     try {
-      if (trackToClose)  { await clientToLeave?.unpublish(trackToClose).catch(() => {}); trackToClose.close(); }
+      const tracksToUnpublish = [videoTrack, audioTrack].filter(Boolean);
+      if (tracksToUnpublish.length && clientToLeave) {
+        await clientToLeave.unpublish(tracksToUnpublish).catch(() => {});
+      }
+      videoTrack?.close();
+      audioTrack?.close();
       if (clientToLeave) { await clientToLeave.leave().catch(() => {}); }
     } catch (e) { console.error('Screen stop error:', e); }
   }, []);
@@ -257,28 +265,38 @@ export function useAgora() {
       screenShareEnabledRef.current  = true;
       screenClientJoiningRef.current = true;
 
-      let screenTrack  = null;
-      let screenClient = null;
+      let screenVideoTrack = null;
+      let screenAudioTrack = null;
+      let screenClient     = null;
 
       try {
-        // Step 1: Browser screen picker (throws PERMISSION_DENIED if cancelled)
-        screenTrack = await AgoraRTC.createScreenVideoTrack(
+        // Step 1: Browser screen picker with audio enabled (throws PERMISSION_DENIED if cancelled)
+        // Returns [videoTrack, audioTrack] when second arg is 'enable'
+        const screenTracks = await AgoraRTC.createScreenVideoTrack(
           { encoderConfig: '1080p_1', optimizationMode: 'detail' },
-          'disable'
+          'enable'
         );
-        if (!screenShareEnabledRef.current) { screenTrack.close(); screenClientJoiningRef.current = false; return; }
+        // Handle both array and single-track returns
+        if (Array.isArray(screenTracks)) {
+          [screenVideoTrack, screenAudioTrack] = screenTracks;
+        } else {
+          screenVideoTrack = screenTracks;
+        }
+
+        if (!screenShareEnabledRef.current) {
+          screenVideoTrack?.close();
+          screenAudioTrack?.close();
+          screenClientJoiningRef.current = false;
+          return;
+        }
+
+        // Mute local playback of screen audio so the sharer doesn't hear their own audio
+        screenAudioTrack?.setVolume(0);
 
         // Step 2: Compute a fixed screen UID and request a token FOR THAT UID.
-        // This is the root fix — the token must match the UID passed to join().
-        // Passing null UID + a token scoped to uid=0 works on some servers but
-        // fails on others, causing the WebSocket to die mid-handshake.
         const screenUid     = getScreenUid();
         const currentChannel = client.channelName;
 
-        // Request a token specifically for the screen UID.
-        // Your backend /api/token endpoint must accept an optional `uid` param.
-        // If it doesn't yet, fall back to a token-less join (works with app-mode
-        // tokens but not with uid-scoped tokens — update your backend if needed).
         let screenToken = null;
         try {
           const resp = await fetch(
@@ -288,7 +306,6 @@ export function useAgora() {
             const data = await resp.json();
             screenToken = data.token;
           } else {
-            // Backend doesn't support uid param yet — fall back to unscoped token
             const resp2 = await fetch(`${BACKEND_URL}/api/token?channelName=${currentChannel}`);
             if (resp2.ok) { const d = await resp2.json(); screenToken = d.token; }
           }
@@ -296,36 +313,47 @@ export function useAgora() {
           throw new Error('Failed to fetch screen share token');
         }
 
-        if (!screenShareEnabledRef.current) { screenTrack.close(); screenClientJoiningRef.current = false; return; }
+        if (!screenShareEnabledRef.current) {
+          screenVideoTrack?.close();
+          screenAudioTrack?.close();
+          screenClientJoiningRef.current = false;
+          return;
+        }
 
         // Step 3: Join with the FIXED screenUid so our filter in user-published works
         screenClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
         await screenClient.join(APP_ID, currentChannel, screenToken, screenUid);
 
         if (!screenShareEnabledRef.current) {
-          screenTrack.close();
+          screenVideoTrack?.close();
+          screenAudioTrack?.close();
           await screenClient.leave().catch(() => {});
           screenClientJoiningRef.current = false;
           return;
         }
 
-        await screenClient.publish(screenTrack);
+        // Publish both video and audio tracks
+        const tracksToPublish = [screenVideoTrack, screenAudioTrack].filter(Boolean);
+        await screenClient.publish(tracksToPublish);
 
-        screenTrack.on('track-ended', () => stopScreenShare());
+        screenVideoTrack.on('track-ended', () => stopScreenShare());
 
-        localScreenTrackRef.current    = screenTrack;
-        screenClientRef.current        = screenClient;
-        screenClientJoiningRef.current = false;
+        localScreenTrackRef.current      = screenVideoTrack;
+        localScreenAudioTrackRef.current = screenAudioTrack;
+        screenClientRef.current          = screenClient;
+        screenClientJoiningRef.current   = false;
         setScreenShareEnabled(true);
 
       } catch (err) {
         screenClientJoiningRef.current = false;
         screenShareEnabledRef.current  = false;
 
-        try { screenTrack?.close(); }         catch {}
-        try { await screenClient?.leave(); }  catch {}
-        localScreenTrackRef.current = null;
-        screenClientRef.current     = null;
+        try { screenVideoTrack?.close(); } catch {}
+        try { screenAudioTrack?.close(); } catch {}
+        try { await screenClient?.leave(); } catch {}
+        localScreenTrackRef.current      = null;
+        localScreenAudioTrackRef.current = null;
+        screenClientRef.current          = null;
 
         if (err.code !== 'PERMISSION_DENIED') {
           console.error('Screen share failed:', err);

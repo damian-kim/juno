@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import {
   Mic, MicOff, Video, VideoOff, Monitor, MonitorOff,
   PhoneOff, Settings, Maximize, Minimize, Grid2X2,
-  Focus, ExternalLink, Gamepad2, Play
+  Focus, ExternalLink, Gamepad2, Play, Volume2, VolumeX
 } from 'lucide-react';
 import { useAppStore } from '../contexts/store';
 import { WordleGame } from './WordleGame';
@@ -34,9 +34,10 @@ function hashCode(str) {
 }
 
 // ─── Video tile with resize handle ─────────────────────────────────────────────
-function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleClick, isFocused, isStrip, isStreamJoined, onJoinStream }) {
+function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleClick, isFocused, isStrip, isStreamJoined, onJoinStream, onStreamVolumeChange }) {
   const videoRef = useRef(null);
-  
+  const [streamVolume, setStreamVolume] = useState(100);
+
   const isLocal = type === 'local';
   // Screen shares are offset by 100,000 in the UID
   const isRemoteScreenShare = type === 'remote' && Number(uid) >= 100000;
@@ -45,24 +46,35 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
   const color = isLocal
     ? '#7c6dfa'
     : TILE_COLORS[Math.abs(hashCode(String(baseUid))) % TILE_COLORS.length];
-  
+
   const label = isLocal ? 'Y' : String(baseUid).slice(0, 2).toUpperCase();
   const name = isLocal ? 'You' : (isRemoteScreenShare ? `User ${String(baseUid).slice(0, 6)}'s Screen` : `User ${String(uid).slice(0, 6)}`);
-  
+
   const hasVideo = isLocal ? agora.cameraEnabled : user?.hasVideo;
   const isMuted = isLocal ? !agora.micEnabled : !user?.hasAudio;
+
+  // Stream is actively being shared (has a video track)
+  const isStreamActive = isRemoteScreenShare && hasVideo;
 
   // Manage Audio Volume for Screen Shares
   useEffect(() => {
     if (isRemoteScreenShare && user?.audioTrack) {
-      user.audioTrack.setVolume(isStreamJoined ? 100 : 0);
+      user.audioTrack.setVolume(isStreamJoined ? streamVolume : 0);
     }
-  }, [isRemoteScreenShare, isStreamJoined, user?.audioTrack]);
+  }, [isRemoteScreenShare, isStreamJoined, user?.audioTrack, streamVolume]);
+
+  const handleVolumeChange = useCallback((e) => {
+    const vol = Number(e.target.value);
+    setStreamVolume(vol);
+    if (user?.audioTrack) {
+      user.audioTrack.setVolume(isStreamJoined ? vol : 0);
+    }
+  }, [user?.audioTrack, isStreamJoined]);
 
   // Play video track into the <video> element
   useEffect(() => {
     if (!hasVideo || !videoRef.current) return;
-    
+
     // Do not play video if it's an unjoined screen share
     if (isRemoteScreenShare && !isStreamJoined) return;
 
@@ -105,14 +117,14 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
         playsInline
         style={{ display: hasVideo && (!isRemoteScreenShare || isStreamJoined) ? 'block' : 'none' }}
       />
-      
-      {/* Discord-like Join Stream Overlay */}
-      {isRemoteScreenShare && !isStreamJoined && (
+
+      {/* Discord-like Join Stream Overlay — only when stream is actively being shared */}
+      {isStreamActive && !isStreamJoined && (
         <div className="stream-unjoined-overlay">
           <Monitor size={40} color="var(--c-accent)" />
           <p className="stream-title">{name}</p>
-          <button 
-            className="join-stream-btn" 
+          <button
+            className="join-stream-btn"
             onClick={(e) => {
               e.stopPropagation();
               onJoinStream(uid);
@@ -121,6 +133,22 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
             <Play size={16} fill="currentColor" />
             Join Stream
           </button>
+        </div>
+      )}
+
+      {/* Per-stream volume control for joined streams */}
+      {isStreamActive && isStreamJoined && (
+        <div className="stream-volume-control">
+          {streamVolume > 0 ? <Volume2 size={14} /> : <VolumeX size={14} />}
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={streamVolume}
+            onChange={handleVolumeChange}
+            className="stream-volume-slider"
+            title={`Stream volume: ${streamVolume}%`}
+          />
         </div>
       )}
 
