@@ -253,8 +253,10 @@ export function useAgora() {
       const uid = await client.join(APP_ID, channel, token, null);
       localUidRef.current = uid;
 
-      // Allocate an internal dynamic data stream tunnel for text frame delivery synchronization
-      dataStreamIdRef.current = client.createDataStream({ syncWithAudio: true });
+      // FIXED CRITICAL METHOD NAME AND TIMING GAP:
+      // In Web SDK NG, the method name is createCustomDataStream.
+      // Must only be called AFTER client.join has completely finished executing.
+      dataStreamIdRef.current = client.createCustomDataStream({ syncWithAudio: true });
 
       const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
         microphoneId: selectedMic || undefined,
