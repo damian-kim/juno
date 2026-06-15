@@ -9,6 +9,10 @@ import { useAppStore } from '../contexts/store';
 import { WordleGame } from './WordleGame';
 import './CallView.css';
 
+// Screen share UIDs are offset from their owner's main UID by this amount.
+// Must match SCREEN_UID_OFFSET in useAgora.js.
+const SCREEN_UID_OFFSET = 100000;
+
 // ─── Network quality indicator ─────────────────────────────────────────────────
 function NetQuality({ quality }) {
   if (!quality) return null;
@@ -34,22 +38,18 @@ function hashCode(str) {
 }
 
 // ─── Video tile with resize handle ─────────────────────────────────────────────
-const SCREEN_UID_OFFSET = 100000;
-
 function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleClick, isFocused, isStrip, isStreamJoined, onJoinStream, onStreamVolumeChange }) {
   const videoRef = useRef(null);
   const [streamVolume, setStreamVolume] = useState(100);
 
   const isLocal = type === 'local';
-  // Detect screen shares: check if (uid - 100000) matches an existing remote user.
-  // This is reliable because regular UIDs are small random integers; a second
-  // client whose UID is exactly 100,000 higher than an existing user is always
-  // the screen-share companion client.
-  const numUid = Number(uid);
-  const isRemoteScreenShare = type === 'remote' && !isLocal && agora.remoteUsers.some(
-    u => u.uid !== numUid && Number(u.uid) === numUid - SCREEN_UID_OFFSET
-  );
-  const baseUid = isRemoteScreenShare ? numUid - SCREEN_UID_OFFSET : numUid;
+  // Remote screen shares are flagged explicitly by useAgora (uid === owner's
+  // main UID + SCREEN_UID_OFFSET, where that owner actually joined the channel
+  // as a regular participant). We rely on that flag rather than a raw UID
+  // threshold, since a regular participant can also be assigned a large
+  // random UID by Agora.
+  const isRemoteScreenShare = type === 'remote' && !!user?.isScreenShare;
+  const baseUid = isRemoteScreenShare ? Number(uid) - SCREEN_UID_OFFSET : uid;
 
   const color = isLocal
     ? '#7c6dfa'
@@ -67,9 +67,9 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
   // Manage Audio Volume for Screen Shares
   useEffect(() => {
     if (isRemoteScreenShare && user?.audioTrack) {
-      user.audioTrack.setVolume(isStreamActive && isStreamJoined ? streamVolume : 0);
+      user.audioTrack.setVolume(isStreamJoined ? streamVolume : 0);
     }
-  }, [isRemoteScreenShare, isStreamActive, isStreamJoined, user?.audioTrack, streamVolume]);
+  }, [isRemoteScreenShare, isStreamJoined, user?.audioTrack, streamVolume]);
 
   const handleVolumeChange = useCallback((e) => {
     const vol = Number(e.target.value);
@@ -146,7 +146,12 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
 
       {/* Per-stream volume control for joined streams */}
       {isStreamActive && isStreamJoined && (
-        <div className="stream-volume-control">
+        <div
+          className="stream-volume-control"
+          onMouseDown={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+          onDoubleClick={(e) => e.stopPropagation()}
+        >
           {streamVolume > 0 ? <Volume2 size={14} /> : <VolumeX size={14} />}
           <input
             type="range"
@@ -632,7 +637,16 @@ export function CallView({ agora }) {
 
     const commonDrag = variant === 'strip' ? {} : {
       draggable: true,
-      onDragStart: () => handleDragStart(idx),
+      onDragStart: (e) => {
+        // Don't initiate a tile-reorder drag when the gesture started on the
+        // per-stream volume slider — otherwise dragging the slider thumb gets
+        // hijacked by the tile's native HTML5 drag-and-drop.
+        if (e.target.closest?.('.stream-volume-control')) {
+          e.preventDefault();
+          return;
+        }
+        handleDragStart(idx);
+      },
       onDragOver: (e) => handleDragOver(e, idx),
       onDrop: () => handleDrop(idx),
       onDragEnd: handleDragEnd,

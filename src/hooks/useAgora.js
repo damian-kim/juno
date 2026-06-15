@@ -25,6 +25,12 @@ export function useAgora() {
   const screenShareEnabledRef  = useRef(false);
   const screenClientJoiningRef = useRef(false);
 
+  // Tracks UIDs of remote users who have joined the channel as a "main"
+  // participant (i.e. not as one of our derived screen-share clients). Used
+  // to reliably distinguish a remote screen-share UID (mainUid + OFFSET)
+  // from a regular participant who happens to have a large random UID.
+  const mainUidsRef = useRef(new Set());
+
   const [joined,             setJoined]             = useState(false);
   const [isJoining,          setIsJoining]          = useState(false);
   const [micEnabled,         setMicEnabled]         = useState(true);
@@ -60,23 +66,26 @@ export function useAgora() {
 
     const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
 
-    client.on('user-published', async (user, mediaType) => {
-      const screenUid = getScreenUid();
-      const isOwnScreenShare = screenUid !== null && user.uid === screenUid;
+    // Track every remote UID that joins the channel as a "main" participant.
+    // A remote screen-share client's UID will be (someMainUid + SCREEN_UID_OFFSET),
+    // so we can use this set to confirm a published stream is genuinely a
+    // screen share rather than just a participant with a large random UID.
+    client.on('user-joined', (user) => {
+      mainUidsRef.current.add(user.uid);
+    });
 
-      // For our own screen share: skip video (we have the local preview) but
-      // subscribe to audio so it reaches other participants via the server relay.
-      // Skipping the video track avoids the redundant-WebSocket / uninitialized
-      // player crashes that Agora triggers when a client subscribes to its own
-      // screen video.
-      if (isOwnScreenShare) {
-        if (mediaType === 'audio') {
-          await client.subscribe(user, 'audio');
-          // Mute locally so the sharer doesn't hear their own screen audio echoed
-          user.audioTrack?.setVolume?.(0);
-        }
-        return;
-      }
+    client.on('user-published', async (user, mediaType) => {
+      // ── CRITICAL FIX ─────────────────────────────────────────────────────────
+      // Skip our own screen-share UID. If the main client tries to subscribe to
+      // its own screen track:
+      //   1. Agora opens a redundant WebSocket → "closed before established" error
+      //   2. The internal renderer hits an uninitialized player object → "Cannot
+      //      read properties of undefined (reading 'current')" crash
+      // We use a FIXED, KNOWN screen UID (localUid + SCREEN_UID_OFFSET) so we can
+      // filter it reliably without waiting for an async uid lookup.
+      const screenUid = getScreenUid();
+      if (screenUid !== null && user.uid === screenUid) return;
+      // ─────────────────────────────────────────────────────────────────────────
 
       await client.subscribe(user, mediaType);
 
@@ -84,6 +93,12 @@ export function useAgora() {
         user.audioTrack?.play();
         applyOutputVolume(user.audioTrack, outputVolume);
       }
+
+      // A remote stream is a genuine screen share only if its UID equals
+      // (someone's main UID) + SCREEN_UID_OFFSET, where that main UID actually
+      // joined the channel as a regular participant. This avoids misidentifying
+      // a regular participant who happens to have a large random UID.
+      const isScreenShare = mainUidsRef.current.has(Number(user.uid) - SCREEN_UID_OFFSET);
 
       setRemoteUsers(prev => {
         const exists = prev.find(u => u.uid === user.uid);
@@ -93,6 +108,7 @@ export function useAgora() {
           hasVideo:   user.hasVideo,
           videoTrack: user.videoTrack,
           audioTrack: user.audioTrack,
+          isScreenShare,
         };
         if (exists) return prev.map(u => u.uid === user.uid ? updated : u);
         return [...prev, updated];
@@ -115,6 +131,7 @@ export function useAgora() {
     client.on('user-left', (user) => {
       // NOTE: Do NOT filter out screen share UIDs here — when a remote screen
       // share client leaves, we need to remove its tile from the UI.
+      mainUidsRef.current.delete(user.uid);
       setRemoteUsers(prev => prev.filter(u => u.uid !== user.uid));
     });
 
@@ -181,6 +198,7 @@ export function useAgora() {
   const leave = useCallback(async () => {
     screenShareEnabledRef.current = false;
     localUidRef.current           = null;
+    mainUidsRef.current.clear();
 
     try {
       if (localScreenTrackRef.current)      { localScreenTrackRef.current.close(); localScreenTrackRef.current = null; }
@@ -295,8 +313,12 @@ export function useAgora() {
           return;
         }
 
-        // Mute local playback of screen audio so the sharer doesn't hear their own audio
-        screenAudioTrack?.setVolume(0);
+        // NOTE: We intentionally do NOT call setVolume(0) on the local screen
+        // audio track here. setVolume() on a local audio track affects the
+        // volume that gets PUBLISHED to remote users, not just local playback
+        // (and local tracks are never played back locally anyway since we
+        // never call .play() on them). Calling setVolume(0) was silently
+        // muting screen-share audio for everyone in the call.
 
         // Step 2: Compute a fixed screen UID and request a token FOR THAT UID.
         const screenUid     = getScreenUid();
