@@ -34,14 +34,22 @@ function hashCode(str) {
 }
 
 // ─── Video tile with resize handle ─────────────────────────────────────────────
+const SCREEN_UID_OFFSET = 100000;
+
 function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleClick, isFocused, isStrip, isStreamJoined, onJoinStream, onStreamVolumeChange }) {
   const videoRef = useRef(null);
   const [streamVolume, setStreamVolume] = useState(100);
 
   const isLocal = type === 'local';
-  // Screen shares are offset by 100,000 in the UID
-  const isRemoteScreenShare = type === 'remote' && Number(uid) >= 100000;
-  const baseUid = isRemoteScreenShare ? Number(uid) - 100000 : uid;
+  // Detect screen shares: check if (uid - 100000) matches an existing remote user.
+  // This is reliable because regular UIDs are small random integers; a second
+  // client whose UID is exactly 100,000 higher than an existing user is always
+  // the screen-share companion client.
+  const numUid = Number(uid);
+  const isRemoteScreenShare = type === 'remote' && !isLocal && agora.remoteUsers.some(
+    u => u.uid !== numUid && Number(u.uid) === numUid - SCREEN_UID_OFFSET
+  );
+  const baseUid = isRemoteScreenShare ? numUid - SCREEN_UID_OFFSET : numUid;
 
   const color = isLocal
     ? '#7c6dfa'
@@ -59,9 +67,9 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
   // Manage Audio Volume for Screen Shares
   useEffect(() => {
     if (isRemoteScreenShare && user?.audioTrack) {
-      user.audioTrack.setVolume(isStreamJoined ? streamVolume : 0);
+      user.audioTrack.setVolume(isStreamActive && isStreamJoined ? streamVolume : 0);
     }
-  }, [isRemoteScreenShare, isStreamJoined, user?.audioTrack, streamVolume]);
+  }, [isRemoteScreenShare, isStreamActive, isStreamJoined, user?.audioTrack, streamVolume]);
 
   const handleVolumeChange = useCallback((e) => {
     const vol = Number(e.target.value);

@@ -61,17 +61,22 @@ export function useAgora() {
     const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
 
     client.on('user-published', async (user, mediaType) => {
-      // ── CRITICAL FIX ─────────────────────────────────────────────────────────
-      // Skip our own screen-share UID. If the main client tries to subscribe to
-      // its own screen track:
-      //   1. Agora opens a redundant WebSocket → "closed before established" error
-      //   2. The internal renderer hits an uninitialized player object → "Cannot
-      //      read properties of undefined (reading 'current')" crash
-      // We use a FIXED, KNOWN screen UID (localUid + SCREEN_UID_OFFSET) so we can
-      // filter it reliably without waiting for an async uid lookup.
       const screenUid = getScreenUid();
-      if (screenUid !== null && user.uid === screenUid) return;
-      // ─────────────────────────────────────────────────────────────────────────
+      const isOwnScreenShare = screenUid !== null && user.uid === screenUid;
+
+      // For our own screen share: skip video (we have the local preview) but
+      // subscribe to audio so it reaches other participants via the server relay.
+      // Skipping the video track avoids the redundant-WebSocket / uninitialized
+      // player crashes that Agora triggers when a client subscribes to its own
+      // screen video.
+      if (isOwnScreenShare) {
+        if (mediaType === 'audio') {
+          await client.subscribe(user, 'audio');
+          // Mute locally so the sharer doesn't hear their own screen audio echoed
+          user.audioTrack?.setVolume?.(0);
+        }
+        return;
+      }
 
       await client.subscribe(user, mediaType);
 
