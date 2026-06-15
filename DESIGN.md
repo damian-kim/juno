@@ -1,5 +1,5 @@
 ---
-name: Wavelength
+name: Juno
 description: Dark, calm voice & video calling for gaming communities
 colors:
   bg-base: "#0e0f14"
@@ -97,13 +97,13 @@ components:
     padding: "4px 12px"
 ---
 
-# Design System: Wavelength
+# Design System: Juno
 
 ## 1. Overview
 
 **Creative North Star: "The Night Studio"**
 
-Wavelength is a dark space with points of light. The interface is the void — deep, quiet, receding. Accent colors are the signals: they draw attention to what matters (active channels, speaking indicators, control states) and vanish when they don't. The system rejects the corporate SaaS playbook entirely: no meeting schedulers, no enterprise blue-grays, no sterile professionalism. This is a room for gamers, not a conference tool.
+Juno is a dark space with points of light. The interface is the void — deep, quiet, receding. Accent colors are the signals: they draw attention to what matters (active channels, speaking indicators, control states) and vanish when they don't. The system rejects the corporate SaaS playbook entirely: no meeting schedulers, no enterprise blue-grays, no sterile professionalism. This is a room for gamers, not a conference tool.
 
 The palette is built on near-black neutrals with cool undertones. The primary accent — a muted indigo — carries the brand identity but is used sparingly, at roughly 10% of any screen. Semantic colors (green for active, red for danger, yellow for caution) are functional, not decorative. The typography pairing of Space Mono (display) and DM Sans (body) creates a technical-but-approachable voice: monospace for identity and labels, humanist sans for readable body text.
 

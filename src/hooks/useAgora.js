@@ -25,6 +25,12 @@ export function useAgora() {
   const screenShareEnabledRef  = useRef(false);
   const screenClientJoiningRef = useRef(false);
 
+  // For subtitling
+  const [subtitles, setSubtitles] = useState([]);
+  const dataStreamIdRef = useRef(null);
+  const audioWsRef = useRef(null);
+  const mediaRecorderRef = useRef(null);
+
   // Tracks UIDs of remote users who have joined the channel as a "main"
   // participant (i.e. not as one of our derived screen-share clients). Used
   // to reliably distinguish a remote screen-share UID (mainUid + OFFSET)
@@ -61,6 +67,71 @@ export function useAgora() {
     return uid + SCREEN_UID_OFFSET;
   };
 
+  const stopSubtitling = useCallback(() => {
+    if (mediaRecorderRef.current) {
+      try { mediaRecorderRef.current.stop(); } catch (e) {}
+      mediaRecorderRef.current = null;
+    }
+    if (audioWsRef.current) {
+      try { audioWsRef.current.close(); } catch (e) {}
+      audioWsRef.current = null;
+    }
+  }, []);
+
+  const startSubtitling = useCallback((targetTrackRef) => {
+    // Teardown any existing subtitling tracks or recorders before re-binding
+    stopSubtitling();
+    if (!targetTrackRef?.current) return;
+
+    // Use secure web sockets pointing to your production-mapped proxy domain layout
+    const ws = new WebSocket('wss://api.juno.rest');
+    audioWsRef.current = ws;
+
+    ws.onopen = () => {
+      // Send handshake initiation message string to configure Deepgram live endpoints
+      ws.send(JSON.stringify({ action: 'start' }));
+
+      // Access the underlying native MediaStreamTrack abstraction
+      const rawAudioTrack = targetTrackRef.current.getMediaStreamTrack();
+      const mediaStream = new MediaStream([rawAudioTrack]);
+
+      // Slice the audio input container using native browser codec algorithms
+      const recorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm;codecs=opus' });
+      mediaRecorderRef.current = recorder;
+
+      recorder.ondataavailable = async (e) => {
+        if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
+          // Convert binary blobs into raw ArrayBuffers for WebSocket transmission
+          const buffer = await e.data.arrayBuffer();
+          ws.send(buffer);
+        }
+      };
+
+      // Extract raw media fragments every 250ms for low-latency delivery
+      recorder.start(250);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'subtitle' && dataStreamIdRef.current !== null) {
+          const payload = JSON.stringify({ uid: localUidRef.current, text: data.text });
+          
+          // Broadcast subtitle packet over Agora direct low-latency DataStream line
+          clientRef.current?.sendStreamMessage(dataStreamIdRef.current, payload);
+          
+          // Render locally within state vectors simultaneously
+          setSubtitles(prev => {
+            const combined = [...prev, JSON.parse(payload)];
+            return combined.length > 3 ? combined.slice(combined.length - 3) : combined;
+          });
+        }
+      } catch (err) {
+        console.error("Failed to process inbound socket subtitle chunk:", err);
+      }
+    };
+  }, [stopSubtitling]);
+
   const initClient = useCallback(() => {
     if (clientRef.current) return clientRef.current;
 
@@ -74,15 +145,26 @@ export function useAgora() {
       mainUidsRef.current.add(user.uid);
     });
 
+    // Intercept incoming synchronized text strings sent by remote callers alongside media tracks
+    client.on("stream-message", (uid, payload) => {
+      const decoder = new TextDecoder("utf8");
+      const messageString = decoder.decode(payload);
+      try {
+        const subtitleData = JSON.parse(messageString);
+        setSubtitles(prev => {
+          const combined = [...prev, subtitleData];
+          return combined.length > 3 ? combined.slice(combined.length - 3) : combined;
+        });
+      } catch (e) { 
+        console.warn("Malformed synchronized data stream frame drop:", e); 
+      }
+    });
+
     client.on('user-published', async (user, mediaType) => {
       // ── CRITICAL FIX ─────────────────────────────────────────────────────────
-      // Skip our own screen-share UID. If the main client tries to subscribe to
-      // its own screen track:
+      // Skip our own screen-share UID. If the main client tries to subscribe to its own screen track:
       //   1. Agora opens a redundant WebSocket → "closed before established" error
-      //   2. The internal renderer hits an uninitialized player object → "Cannot
-      //      read properties of undefined (reading 'current')" crash
-      // We use a FIXED, KNOWN screen UID (localUid + SCREEN_UID_OFFSET) so we can
-      // filter it reliably without waiting for an async uid lookup.
+      //   2. The internal renderer hits an uninitialized player object → crash
       const screenUid = getScreenUid();
       if (screenUid !== null && user.uid === screenUid) return;
       // ─────────────────────────────────────────────────────────────────────────
@@ -96,8 +178,7 @@ export function useAgora() {
 
       // A remote stream is a genuine screen share only if its UID equals
       // (someone's main UID) + SCREEN_UID_OFFSET, where that main UID actually
-      // joined the channel as a regular participant. This avoids misidentifying
-      // a regular participant who happens to have a large random UID.
+      // joined the channel as a regular participant.
       const isScreenShare = mainUidsRef.current.has(Number(user.uid) - SCREEN_UID_OFFSET);
 
       setRemoteUsers(prev => {
@@ -116,9 +197,6 @@ export function useAgora() {
     });
 
     client.on('user-unpublished', (user, mediaType) => {
-      // NOTE: Do NOT filter out screen share UIDs here — we need to track
-      // when remote screen shares stop publishing so the UI updates properly.
-
       setRemoteUsers(prev =>
         prev.map(u => u.uid === user.uid
           ? { ...u, hasAudio: user.hasAudio, hasVideo: user.hasVideo,
@@ -129,8 +207,6 @@ export function useAgora() {
     });
 
     client.on('user-left', (user) => {
-      // NOTE: Do NOT filter out screen share UIDs here — when a remote screen
-      // share client leaves, we need to remove its tile from the UI.
       mainUidsRef.current.delete(user.uid);
       setRemoteUsers(prev => prev.filter(u => u.uid !== user.uid));
     });
@@ -177,6 +253,9 @@ export function useAgora() {
       const uid = await client.join(APP_ID, channel, token, null);
       localUidRef.current = uid;
 
+      // Allocate an internal dynamic data stream tunnel for text frame delivery synchronization
+      dataStreamIdRef.current = client.createDataStream({ syncWithAudio: true });
+
       const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
         microphoneId: selectedMic || undefined,
         encoderConfig: 'high_quality',
@@ -199,6 +278,7 @@ export function useAgora() {
     screenShareEnabledRef.current = false;
     localUidRef.current           = null;
     mainUidsRef.current.clear();
+    stopSubtitling();
 
     try {
       if (localScreenTrackRef.current)      { localScreenTrackRef.current.close(); localScreenTrackRef.current = null; }
@@ -213,8 +293,8 @@ export function useAgora() {
     } catch (e) { console.error('Leave error:', e); }
 
     setJoined(false); setMicEnabled(true); setCameraEnabled(false);
-    setScreenShareEnabled(false); setRemoteUsers([]);
-  }, []);
+    setScreenShareEnabled(false); setRemoteUsers([]); setSubtitles([]);
+  }, [stopSubtitling]);
 
   const toggleMic = useCallback(async () => {
     const track = localAudioTrackRef.current;
@@ -259,7 +339,7 @@ export function useAgora() {
     screenShareEnabledRef.current = false;
     setScreenShareEnabled(false);
 
-    if (screenClientJoiningRef.current) return; // Pipeline will self-clean
+    if (screenClientJoiningRef.current) return;
 
     const videoTrack    = localScreenTrackRef.current;
     const audioTrack    = localScreenAudioTrackRef.current;
@@ -293,13 +373,10 @@ export function useAgora() {
       let screenClient     = null;
 
       try {
-        // Step 1: Browser screen picker with audio enabled (throws PERMISSION_DENIED if cancelled)
-        // Returns [videoTrack, audioTrack] when second arg is 'enable'
         const screenTracks = await AgoraRTC.createScreenVideoTrack(
           { encoderConfig: '1080p_2', optimizationMode: 'detail' },
           'enable'
         );
-        // Handle both array and single-track returns
         if (Array.isArray(screenTracks)) {
           [screenVideoTrack, screenAudioTrack] = screenTracks;
         } else {
@@ -313,14 +390,6 @@ export function useAgora() {
           return;
         }
 
-        // NOTE: We intentionally do NOT call setVolume(0) on the local screen
-        // audio track here. setVolume() on a local audio track affects the
-        // volume that gets PUBLISHED to remote users, not just local playback
-        // (and local tracks are never played back locally anyway since we
-        // never call .play() on them). Calling setVolume(0) was silently
-        // muting screen-share audio for everyone in the call.
-
-        // Step 2: Compute a fixed screen UID and request a token FOR THAT UID.
         const screenUid     = getScreenUid();
         const currentChannel = client.channelName;
 
@@ -347,7 +416,6 @@ export function useAgora() {
           return;
         }
 
-        // Step 3: Join with the FIXED screenUid so our filter in user-published works
         screenClient = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
         await screenClient.join(APP_ID, currentChannel, screenToken, screenUid);
 
@@ -359,7 +427,6 @@ export function useAgora() {
           return;
         }
 
-        // Publish both video and audio tracks
         const tracksToPublish = [screenVideoTrack, screenAudioTrack].filter(Boolean);
         await screenClient.publish(tracksToPublish);
 
@@ -411,15 +478,15 @@ export function useAgora() {
   useEffect(() => {
     loadDevices();
     return () => { if (clientRef.current?.connectionState === 'CONNECTED') leave(); };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   return {
     joined, micEnabled, cameraEnabled, screenShareEnabled,
     remoteUsers, connectionState, localVolume, outputVolume,
-    networkQuality, error,
+    networkQuality, error, subtitles,
     audioDevices, videoDevices, outputDevices,
     selectedMic, selectedCamera, selectedOutput,
-    join, leave,
+    join, leave, startSubtitling, stopSubtitling,
     toggleMic, toggleCamera, toggleScreenShare, stopScreenShare,
     changeMicVolume, changeOutputVolume,
     switchMic, switchCamera, setSelectedOutput,
@@ -428,5 +495,6 @@ export function useAgora() {
     localVideoTrack:  localVideoTrackRef,
     localAudioTrack:  localAudioTrackRef,
     localScreenTrack: localScreenTrackRef,
+    localScreenAudioTrack: localScreenAudioTrackRef,
   };
 }

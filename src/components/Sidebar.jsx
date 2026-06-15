@@ -53,10 +53,10 @@ export function Sidebar({ agora }) {
       {/* Server header */}
       <div className="sidebar-header">
         <div className="server-icon">
-          <span className="font-mono">W</span>
+          <span className="font-mono">J</span>
         </div>
         <div className="server-info">
-          <p className="server-name font-mono">wavelength</p>
+          <p className="server-name font-mono">juno</p>
           <p className="server-sub text-muted text-xs">
             {agora.connectionState === 'CONNECTED' ? (
               <span className="text-green flex items-center gap-1">

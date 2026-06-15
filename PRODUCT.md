@@ -10,7 +10,7 @@ Gamers and online communities who need voice/video calling for their squads. The
 
 ## Product Purpose
 
-Wavelength is a lightweight voice & video calling app for gaming communities. It provides channel-based voice/video rooms with screen sharing, virtual backgrounds, and per-device audio controls — powered by Agora RTC for sub-100ms latency. Success looks like a squad being able to jump into a call instantly without friction, distractions, or bloat.
+Juno is a lightweight voice & video calling app for gaming communities. It provides channel-based voice/video rooms with screen sharing, virtual backgrounds, and per-device audio controls — powered by Agora RTC for sub-100ms latency. Success looks like a squad being able to jump into a call instantly without friction, distractions, or bloat.
 
 ## Brand Personality
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 2,
   "generatedAt": "2026-06-13T00:00:00Z",
-  "title": "Design System: Wavelength",
+  "title": "Design System: Juno",
   "extensions": {
     "colorMeta": {
       "accent": {
@@ -223,13 +223,13 @@
       "kind": "nav",
       "refersTo": "navigation",
       "description": "Server sidebar with channel list, user bar, and status indicators.",
-      "html": "<aside class=\"ds-sidebar\"><div class=\"ds-sidebar-header\"><div class=\"ds-server-icon\">W</div><div><p class=\"ds-server-name">wavelength</p><p class=\"ds-server-sub">college server</p></div></div><div class=\"ds-sidebar-section\"><p class=\"ds-section-label">Voice Channels</p><button class=\"ds-channel-item ds-active\"><span>#</span><span>general</span></button></div></aside>",
+      "html": "<aside class=\"ds-sidebar\"><div class=\"ds-sidebar-header\"><div class=\"ds-server-icon\">J</div><div><p class=\"ds-server-name">juno</p><p class=\"ds-server-sub">college server</p></div></div><div class=\"ds-sidebar-section\"><p class=\"ds-section-label">Voice Channels</p><button class=\"ds-channel-item ds-active\"><span>#</span><span>general</span></button></div></aside>",
       "css": ".ds-sidebar { width: 220px; min-width: 220px; height: 100%; background: #14161e; border-right: 1px solid rgba(255,255,255,0.07); display: flex; flex-direction: column; overflow: hidden; font-family: 'DM Sans', sans-serif; } .ds-sidebar-header { display: flex; align-items: center; gap: 10px; padding: 14px 14px 10px; border-bottom: 1px solid rgba(255,255,255,0.07); } .ds-server-icon { width: 34px; height: 34px; border-radius: 10px; background: #6b7aee; display: flex; align-items: center; justify-content: center; font-family: 'Space Mono', monospace; font-size: 16px; font-weight: 700; color: #fff; box-shadow: 0 0 12px rgba(107,122,238,0.35); } .ds-server-name { font-family: 'Space Mono', monospace; font-size: 14px; font-weight: 700; color: #f0f0f8; } .ds-server-sub { font-size: 11px; color: #5c5f7a; } .ds-sidebar-section { padding: 8px 8px 0; } .ds-section-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: #5c5f7a; padding: 8px 6px 4px; } .ds-channel-item { display: flex; align-items: center; gap: 6px; width: 100%; padding: 5px 8px; border-radius: 6px; color: #9b9db8; font-size: 13.5px; background: transparent; border: none; cursor: pointer; text-align: left; transition: background 120ms ease, color 120ms ease; } .ds-channel-item:hover { background: #1c1f2b; color: #f0f0f8; } .ds-channel-item.ds-active { background: rgba(107,122,238,0.18); color: #f0f0f8; position: relative; } .ds-channel-item.ds-active::before { content: ''; position: absolute; left: 0; top: 4px; bottom: 4px; width: 3px; background: #6b7aee; border-radius: 0 3px 3px 0; }"
     }
   ],
   "narrative": {
     "northStar": "The Night Studio",
-    "overview": "Wavelength is a dark space with points of light. The interface is the void — deep, quiet, receding. Accent colors are the signals: they draw attention to what matters (active channels, speaking indicators, control states) and vanish when they don't. The system rejects the corporate SaaS playbook entirely: no meeting schedulers, no enterprise blue-grays, no sterile professionalism. This is a room for gamers, not a conference tool.\n\nThe palette is built on near-black neutrals with cool undertones. The primary accent — a muted indigo — carries the brand identity but is used sparingly, at roughly 10% of any screen. Semantic colors (green for active, red for danger, yellow for caution) are functional, not decorative. The typography pairing of Space Mono (display) and DM Sans (body) creates a technical-but-approachable voice: monospace for identity and labels, humanist sans for readable body text.",
+    "overview": "Juno is a dark space with points of light. The interface is the void — deep, quiet, receding. Accent colors are the signals: they draw attention to what matters (active channels, speaking indicators, control states) and vanish when they don't. The system rejects the corporate SaaS playbook entirely: no meeting schedulers, no enterprise blue-grays, no sterile professionalism. This is a room for gamers, not a conference tool.\n\nThe palette is built on near-black neutrals with cool undertones. The primary accent — a muted indigo — carries the brand identity but is used sparingly, at roughly 10% of any screen. Semantic colors (green for active, red for danger, yellow for caution) are functional, not decorative. The typography pairing of Space Mono (display) and DM Sans (body) creates a technical-but-approachable voice: monospace for identity and labels, humanist sans for readable body text.",
     "keyCharacteristics": [
       "Dark-first: the interface lives in darkness; light is earned through accent and state",
       "Functional color: every color has a job; no decorative fills or gradient backgrounds",

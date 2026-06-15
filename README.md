@@ -1,4 +1,4 @@
-# Wavelength — VOIP App
+# Juno — VOIP App
 
 A Discord-style voice/video calling app built with **React + Agora RTC SDK**.
 
