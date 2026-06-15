@@ -296,7 +296,7 @@ export function useAgora() {
         // Step 1: Browser screen picker with audio enabled (throws PERMISSION_DENIED if cancelled)
         // Returns [videoTrack, audioTrack] when second arg is 'enable'
         const screenTracks = await AgoraRTC.createScreenVideoTrack(
-          { encoderConfig: '1080p_1', optimizationMode: 'detail' },
+          { encoderConfig: '1080p_2', optimizationMode: 'detail' },
           'enable'
         );
         // Handle both array and single-track returns
