@@ -18,6 +18,7 @@ export function useAgora() {
   const localAudioTrackRef  = useRef(null);
   const localVideoTrackRef  = useRef(null);
   const localScreenTrackRef = useRef(null);
+  const localScreenAudioTrackRef = useRef(null);
 
   // Store our own main UID after join so we can derive the screen share UID
   const localUidRef            = useRef(null);

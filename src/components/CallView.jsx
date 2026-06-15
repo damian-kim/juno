@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import {
   Mic, MicOff, Video, VideoOff, Monitor, MonitorOff,
   PhoneOff, Settings, Maximize, Minimize, Grid2X2,
-  Focus, ExternalLink, Gamepad2
+  Focus, ExternalLink, Gamepad2, Play
 } from 'lucide-react';
 import { useAppStore } from '../contexts/store';
 import { WordleGame } from './WordleGame';
@@ -34,20 +34,37 @@ function hashCode(str) {
 }
 
 // ─── Video tile with resize handle ─────────────────────────────────────────────
-function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleClick, isFocused, isStrip }) {
+function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleClick, isFocused, isStrip, isStreamJoined, onJoinStream }) {
   const videoRef = useRef(null);
+  
   const isLocal = type === 'local';
+  // Screen shares are offset by 100,000 in the UID
+  const isRemoteScreenShare = type === 'remote' && Number(uid) >= 100000;
+  const baseUid = isRemoteScreenShare ? Number(uid) - 100000 : uid;
+
   const color = isLocal
     ? '#7c6dfa'
-    : TILE_COLORS[Math.abs(hashCode(String(uid))) % TILE_COLORS.length];
-  const label = isLocal ? 'Y' : String(uid).slice(0, 2).toUpperCase();
-  const name = isLocal ? 'You' : `User ${String(uid).slice(0, 6)}`;
+    : TILE_COLORS[Math.abs(hashCode(String(baseUid))) % TILE_COLORS.length];
+  
+  const label = isLocal ? 'Y' : String(baseUid).slice(0, 2).toUpperCase();
+  const name = isLocal ? 'You' : (isRemoteScreenShare ? `User ${String(baseUid).slice(0, 6)}'s Screen` : `User ${String(uid).slice(0, 6)}`);
+  
   const hasVideo = isLocal ? agora.cameraEnabled : user?.hasVideo;
   const isMuted = isLocal ? !agora.micEnabled : !user?.hasAudio;
+
+  // Manage Audio Volume for Screen Shares
+  useEffect(() => {
+    if (isRemoteScreenShare && user?.audioTrack) {
+      user.audioTrack.setVolume(isStreamJoined ? 100 : 0);
+    }
+  }, [isRemoteScreenShare, isStreamJoined, user?.audioTrack]);
 
   // Play video track into the <video> element
   useEffect(() => {
     if (!hasVideo || !videoRef.current) return;
+    
+    // Do not play video if it's an unjoined screen share
+    if (isRemoteScreenShare && !isStreamJoined) return;
 
     if (isLocal) {
       let attempts = 0;
@@ -70,13 +87,13 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
       }
       return () => { try { user?.videoTrack?.stop?.(); } catch {} };
     }
-  }, [hasVideo, isLocal, agora, user]);
+  }, [hasVideo, isLocal, agora, user, isRemoteScreenShare, isStreamJoined]);
 
   const tileStyle = isStrip ? {} : { flex: flexGrow, minWidth: 0 };
 
   return (
     <div
-      className={`video-tile ${isFocused ? 'focused' : ''} ${isStrip ? 'strip-tile' : ''}`}
+      className={`video-tile ${isFocused ? 'focused' : ''} ${isStrip ? 'strip-tile' : ''} ${isRemoteScreenShare ? 'is-screen-share' : ''}`}
       style={tileStyle}
       onDoubleClick={onDoubleClick}
     >
@@ -86,18 +103,39 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
         autoPlay
         muted={isLocal}
         playsInline
-        style={{ display: hasVideo ? 'block' : 'none' }}
+        style={{ display: hasVideo && (!isRemoteScreenShare || isStreamJoined) ? 'block' : 'none' }}
       />
-      {!hasVideo && (
+      
+      {/* Discord-like Join Stream Overlay */}
+      {isRemoteScreenShare && !isStreamJoined && (
+        <div className="stream-unjoined-overlay">
+          <Monitor size={40} color="var(--c-accent)" />
+          <p className="stream-title">{name}</p>
+          <button 
+            className="join-stream-btn" 
+            onClick={(e) => {
+              e.stopPropagation();
+              onJoinStream(uid);
+            }}
+          >
+            <Play size={16} fill="currentColor" />
+            Join Stream
+          </button>
+        </div>
+      )}
+
+      {/* Avatar Fallback */}
+      {!hasVideo && (!isRemoteScreenShare || isStreamJoined) && (
         <div className="video-avatar">
           <div className="avatar-circle" style={{ background: color + '22', color }}>{label}</div>
           <p className="avatar-name">{name}</p>
         </div>
       )}
+
       <div className="tile-overlay" onDoubleClick={onDoubleClick}>
         <div className="tile-info">
           <span className="tile-name">{name}</span>
-          {isMuted && <span className="tile-muted"><MicOff size={12} /></span>}
+          {isMuted && !isRemoteScreenShare && <span className="tile-muted"><MicOff size={12} /></span>}
         </div>
       </div>
 
@@ -112,8 +150,8 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
           }}
           title="Drag to resize"
         >
-          <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-            <path d="M9 1L1 9M9 5L5 9M9 9L9 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <svg width="12" height="12" viewBox="0 0 10 10" fill="none">
+            <path d="M9 1L1 9M9 5L5 9M9 9L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
         </div>
       )}
@@ -356,6 +394,8 @@ export function CallView({ agora }) {
   const [dragIdx, setDragIdx] = useState(null);
   const [dragOverIdx, setDragOverIdx] = useState(null);
   const [tileSizes, setTileSizes] = useState({}); // { [uid]: flexGrow }
+  const [joinedStreams, setJoinedStreams] = useState(new Set()); // Track joined screen shares
+  
   const resizingRef = useRef(null); // { uid, startX, startSize }
   const callViewRef = useRef(null);
   const popoutRef = useRef(null);
@@ -447,8 +487,6 @@ export function CallView({ agora }) {
       const containerWidth = container.offsetWidth;
       const dx = e.clientX - ref.startX;
       // Convert pixel delta to flex-grow delta
-      // Each tile at flex=1 takes (containerWidth / totalTiles) px
-      // So deltaGrow = dx / (containerWidth / totalTiles)
       const totalTiles = orderedTiles.length;
       const baseTileWidth = containerWidth / Math.min(totalTiles, effectiveCols);
       const deltaGrow = dx / baseTileWidth;
@@ -482,6 +520,17 @@ export function CallView({ agora }) {
     if (focusedUser === uid) clearFocus();
     else setFocusedUser(uid);
   };
+
+  // ── Join Stream handler ──────────────────────────────────────────────────────
+  const handleJoinStream = useCallback((streamUid) => {
+    setJoinedStreams(prev => {
+      const next = new Set(prev);
+      next.add(streamUid);
+      return next;
+    });
+    // Automatically focus the stream when joining it
+    setFocusedUser(streamUid);
+  }, [setFocusedUser]);
 
   // ── Popout (Document PiP with real React + video) ────────────────────────────
   const handlePopout = useCallback(async () => {
@@ -564,6 +613,8 @@ export function CallView({ agora }) {
     const style = variant === 'strip' ? {} : { 
       flex: flexGrow, 
       minWidth: 0,
+      display: 'flex',
+      flexDirection: 'column'
     };
 
     return (
@@ -579,6 +630,8 @@ export function CallView({ agora }) {
           onDoubleClick={() => variant !== 'strip' && handleFocusToggle(uid)}
           isFocused={isTileFocused}
           isStrip={variant === 'strip'}
+          isStreamJoined={joinedStreams.has(uid)}
+          onJoinStream={handleJoinStream}
         />
       </div>
     );

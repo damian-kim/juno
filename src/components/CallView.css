@@ -174,9 +174,8 @@
   border: 1.5px solid var(--c-border);
   transition: border-color var(--t-fast), box-shadow var(--t-fast), opacity var(--t-fast);
   min-height: 100px;
-  height: 100%; /* <--- ADD THIS LINE */
+  height: 100%; /* Ensures tile expands perfectly when grid is adjusted */
   cursor: grab;
-  /* Fill the flex space */
   flex: 1;
   min-width: 0;
 }
@@ -187,6 +186,10 @@
   box-shadow: 0 0 0 2px var(--c-green-dim), inset 0 0 0 1px var(--c-green);
 }
 
+.video-tile.is-screen-share {
+  border-color: var(--c-accent);
+}
+
 /* Drag states */
 .video-tile.dragging {
   opacity: 0.4;
@@ -194,6 +197,48 @@
 .video-tile.drag-over {
   border-color: var(--c-accent);
   box-shadow: 0 0 0 2px var(--c-accent-dim);
+}
+
+/* Join Stream Overlay */
+.stream-unjoined-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(14, 15, 20, 0.95);
+  backdrop-filter: blur(8px);
+  gap: 16px;
+}
+.stream-title {
+  color: #fff;
+  font-weight: 600;
+  font-size: 15px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+}
+.join-stream-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--c-accent);
+  color: #fff;
+  border: none;
+  padding: 10px 20px;
+  border-radius: var(--r-md);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+  box-shadow: 0 4px 12px rgba(124, 109, 250, 0.3);
+}
+.join-stream-btn:hover { 
+  background: var(--c-accent-hover); 
+  transform: translateY(-1px);
+}
+.join-stream-btn:active {
+  transform: translateY(1px);
 }
 
 /* Drag handle indicator (top center) */
@@ -218,19 +263,17 @@
   position: absolute;
   bottom: 0;
   right: 0;
-  width: 20px;
-  height: 20px;
-  z-index: 4;
+  width: 24px;
+  height: 24px;
+  z-index: 6; /* High z-index to sit above overlays */
   cursor: nwse-resize;
   display: flex;
   align-items: flex-end;
   justify-content: flex-end;
-  padding: 2px;
-  color: rgba(255,255,255,0.2);
+  padding: 4px;
+  color: rgba(255,255,255,0.4);
   opacity: 0;
   transition: opacity var(--t-fast), color var(--t-fast);
-  /* Prevent the handle from being hidden by overflow:hidden */
-  /* We'll use a pseudo-element to extend the hit area */
 }
 .video-tile:hover .tile-resize-handle { opacity: 1; }
 .tile-resize-handle:hover { color: var(--c-accent); }
@@ -243,6 +286,11 @@
   height: 100%;
   object-fit: cover;
   background: var(--c-bg-elevated);
+}
+/* If the tile is a screen share but joined, contain it so nothing is cut off */
+.video-tile.is-screen-share .video-el {
+  object-fit: contain;
+  background: #000;
 }
 
 .video-avatar {
