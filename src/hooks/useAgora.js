@@ -26,7 +26,7 @@ export function useAgora() {
   const screenClientJoiningRef = useRef(false);
 
   // For subtitling
-  const [subtitles, setSubtitles] = useState([]);
+  const [subtitles, setSubtitles] = useState({});
   const dataStreamIdRef = useRef(null);
   const audioWsRef = useRef(null);
   const mediaRecorderRef = useRef(null);
@@ -79,28 +79,24 @@ export function useAgora() {
   }, []);
 
   const startSubtitling = useCallback((targetTrackRef, sourceLanguage = "zh-CN", targetLanguage = "en") => {
-    // 1. Teardown any existing subtitling tracks, recorders, or sockets before re-binding
     stopSubtitling();
     if (!targetTrackRef?.current) {
       console.warn("⚠️ Subtitling block skipped: No target audio track reference passed.");
       return;
     }
 
-    // 2. Initialize connection to your cloud pipeline proxy
     const ws = new WebSocket('wss://api.juno.rest');
     audioWsRef.current = ws;
 
     ws.onopen = () => {
       console.log(`🔌 WebSocket linked! Handshaking: ${sourceLanguage} -> ${targetLanguage}`);
       
-      // Send dynamic language variables directly up the pipeline initialization handshake
       ws.send(JSON.stringify({ 
         action: 'start',
         sourceLanguage: sourceLanguage,
         targetLanguage: targetLanguage
       }));
 
-      // Extract the underlying native hardware MediaStreamTrack abstraction safely
       const liveAudioTrack = localAudioTrackRef.current?.getMediaStreamTrack() 
         || targetTrackRef?.current?.getMediaStreamTrack();
 
@@ -109,11 +105,9 @@ export function useAgora() {
         return;
       }
 
-      // Clone the track wrapper to prevent interfering with Agora's core WebRTC voice lane
       const duplicatedTrack = liveAudioTrack.clone();
       const mediaStream = new MediaStream([duplicatedTrack]);
 
-      // Fallback safety verification matching standard browser codec profiles
       let chosenMime = 'audio/webm;codecs=opus';
       if (!MediaRecorder.isTypeSupported(chosenMime)) {
         chosenMime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
@@ -125,13 +119,11 @@ export function useAgora() {
 
       recorder.ondataavailable = async (e) => {
         if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
-          // Flatten media chunks into raw ArrayBuffers for immediate transmission
           const buffer = await e.data.arrayBuffer();
           ws.send(buffer);
         }
       };
 
-      // Slice out clean 250ms binary chunks for low-latency delivery
       recorder.start(250);
     };
 
@@ -139,28 +131,31 @@ export function useAgora() {
       try {
         const data = JSON.parse(event.data);
         if (data.type === 'subtitle') {
-          // Build out our text layout package 
-          const payload = { uid: localUidRef.current || 'Local', text: data.text };
-          
-          // Render straight into our local state frame to guarantee instant display
-          setSubtitles(prev => {
-            const combined = [...prev, payload];
-            // Keep a floating backlog layout frame of the last 3 transcript strings
-            return combined.length > 3 ? combined.slice(combined.length - 3) : combined;
-          });
+          const rawText = data.text;
+          const myUid = localUidRef.current || '__local__';
+
+          // 1. Render locally on your own tile instantly via a keyed UID object state map
+          setSubtitles(prev => ({ ...prev, [myUid]: rawText }));
+
+          // 2. BROADCAST: Convert text to binary and broadcast to all remote peers via Agora
+          if (dataStreamIdRef.current && dataStreamIdRef.current !== true && clientRef.current) {
+            const encoder = new TextEncoder();
+            const payload = encoder.encode(JSON.stringify({ uid: myUid, text: rawText }));
+            
+            try {
+              clientRef.current.sendStreamMessage(dataStreamIdRef.current, payload);
+            } catch (err) {
+              console.error("Failed to broadcast subtitle token stream packet:", err);
+            }
+          }
         }
       } catch (err) {
         console.error("❌ Failed to process inbound socket subtitle chunk:", err);
       }
     };
 
-    ws.onerror = (error) => {
-      console.error("❌ Subtitle WebSocket encountered an operational exception:", error);
-    };
-
-    ws.onclose = () => {
-      console.log("🔒 Subtitle WebSocket loop successfully closed down.");
-    };
+    ws.onerror = (error) => console.error("❌ Subtitle WebSocket operational exception:", error);
+    ws.onclose = () => console.log("🔒 Subtitle WebSocket loop successfully closed down.");
   }, [stopSubtitling]);
 
   const initClient = useCallback(() => {
@@ -168,37 +163,29 @@ export function useAgora() {
 
     const client = AgoraRTC.createClient({ mode: 'rtc', codec: 'vp8' });
 
-    // Track every remote UID that joins the channel as a "main" participant.
-    // A remote screen-share client's UID will be (someMainUid + SCREEN_UID_OFFSET),
-    // so we can use this set to confirm a published stream is genuinely a
-    // screen share rather than just a participant with a large random UID.
     client.on('user-joined', (user) => {
       mainUidsRef.current.add(user.uid);
     });
 
-    // Intercept incoming synchronized text strings sent by remote callers alongside media tracks
+    // 👇 FIXED: Catch remote stream messages broadcasted by other players
     client.on("stream-message", (uid, payload) => {
-      const decoder = new TextDecoder("utf8");
-      const messageString = decoder.decode(payload);
       try {
-        const subtitleData = JSON.parse(messageString);
-        setSubtitles(prev => {
-          const combined = [...prev, subtitleData];
-          return combined.length > 3 ? combined.slice(combined.length - 3) : combined;
-        });
+        const decoder = new TextDecoder("utf8");
+        const subtitleData = JSON.parse(decoder.decode(payload));
+        
+        const speakerUid = String(subtitleData.uid);
+        const textContent = subtitleData.text;
+
+        // Map the subtitle text directly to the specific speaker's UID key
+        setSubtitles(prev => ({ ...prev, [speakerUid]: textContent }));
       } catch (e) { 
         console.warn("Malformed synchronized data stream frame drop:", e); 
       }
     });
 
     client.on('user-published', async (user, mediaType) => {
-      // ── CRITICAL FIX ─────────────────────────────────────────────────────────
-      // Skip our own screen-share UID. If the main client tries to subscribe to its own screen track:
-      //   1. Agora opens a redundant WebSocket → "closed before established" error
-      //   2. The internal renderer hits an uninitialized player object → crash
       const screenUid = getScreenUid();
       if (screenUid !== null && user.uid === screenUid) return;
-      // ─────────────────────────────────────────────────────────────────────────
 
       await client.subscribe(user, mediaType);
 
@@ -207,9 +194,6 @@ export function useAgora() {
         applyOutputVolume(user.audioTrack, outputVolume);
       }
 
-      // A remote stream is a genuine screen share only if its UID equals
-      // (someone's main UID) + SCREEN_UID_OFFSET, where that main UID actually
-      // joined the channel as a regular participant.
       const isScreenShare = mainUidsRef.current.has(Number(user.uid) - SCREEN_UID_OFFSET);
 
       setRemoteUsers(prev => {
@@ -240,11 +224,16 @@ export function useAgora() {
     client.on('user-left', (user) => {
       mainUidsRef.current.delete(user.uid);
       setRemoteUsers(prev => prev.filter(u => u.uid !== user.uid));
+      // Flush subtitles profile cache for users who exit
+      setSubtitles(prev => {
+        const next = { ...prev };
+        delete next[user.uid];
+        return next;
+      });
     });
 
     client.on('connection-state-change', setConnectionState);
     client.on('network-quality',         setNetworkQuality);
-    client.on('exception',               (e) => console.warn('Agora exception:', e));
 
     clientRef.current = client;
     return client;
@@ -284,7 +273,8 @@ export function useAgora() {
       const uid = await client.join(APP_ID, channel, token, null);
       localUidRef.current = uid;
 
-      dataStreamIdRef.current = true;
+      const streamId = await client.createDataStream({ reliable: true, ordered: true });
+      dataStreamIdRef.current = streamId;
 
       const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
         microphoneId: selectedMic || undefined,

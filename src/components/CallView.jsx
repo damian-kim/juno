@@ -43,13 +43,14 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
   const [streamVolume, setStreamVolume] = useState(100);
 
   const isLocal = type === 'local';
-  // Remote screen shares are flagged explicitly by useAgora (uid === owner's
-  // main UID + SCREEN_UID_OFFSET, where that owner actually joined the channel
-  // as a regular participant). We rely on that flag rather than a raw UID
-  // threshold, since a regular participant can also be assigned a large
-  // random UID by Agora.
   const isRemoteScreenShare = type === 'remote' && !!user?.isScreenShare;
   const baseUid = isRemoteScreenShare ? Number(uid) - SCREEN_UID_OFFSET : uid;
+
+  // Resolve target lookup key maps cleanly
+  const currentKey = isLocal ? (agora.joined ? String(agora.localVideoTrack?.current?._client?.uid || '__local__') : '__local__') : String(uid);
+  
+  // Extract specific active text string matched to this tile card instance
+  const currentSubtitleText = agora.subtitles?.[currentKey] || "";
 
   const color = isLocal
     ? '#7c6dfa'
@@ -60,11 +61,8 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
 
   const hasVideo = isLocal ? agora.cameraEnabled : user?.hasVideo;
   const isMuted = isLocal ? !agora.micEnabled : !user?.hasAudio;
-
-  // Stream is actively being shared (has a video track)
   const isStreamActive = isRemoteScreenShare && hasVideo;
 
-  // Manage Audio Volume for Screen Shares
   useEffect(() => {
     if (isRemoteScreenShare && user?.audioTrack) {
       user.audioTrack.setVolume(isStreamJoined ? streamVolume : 0);
@@ -79,11 +77,8 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
     }
   }, [user?.audioTrack, isStreamJoined]);
 
-  // Play video track into the <video> element
   useEffect(() => {
     if (!hasVideo || !videoRef.current) return;
-
-    // Do not play video if it's an unjoined screen share
     if (isRemoteScreenShare && !isStreamJoined) return;
 
     if (isLocal) {
@@ -113,7 +108,7 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
 
   return (
     <div
-      className={`video-tile ${isFocused ? 'focused' : ''} ${isStrip ? 'strip-tile' : ''} ${isRemoteScreenShare ? 'is-screen-share' : ''}`}
+      className={`video-tile relative ${isFocused ? 'focused' : ''} ${isStrip ? 'strip-tile' : ''} ${isRemoteScreenShare ? 'is-screen-share' : ''}`}
       style={tileStyle}
       onDoubleClick={onDoubleClick}
     >
@@ -126,7 +121,16 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
         style={{ display: hasVideo && (!isRemoteScreenShare || isStreamJoined) ? 'block' : 'none' }}
       />
 
-      {/* Discord-like Join Stream Overlay — only when stream is actively being shared */}
+      {/* 👇 NEW ABSOLUTE SUBTITLE CONTAINMENT MATRIX ANCHORED INSIDE THE TILE */}
+      {currentSubtitleText && currentSubtitleText.trim().length > 0 && (
+        <div 
+          className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-black/80 text-white text-sm font-semibold font-sans px-3 py-1.5 rounded-md border border-white/10 max-w-[85%] text-center shadow-2xl z-40 animate-fade-in tracking-wide pointer-events-none select-none"
+          style={{ textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}
+        >
+          {currentSubtitleText}
+        </div>
+      )}
+
       {isStreamActive && !isStreamJoined && (
         <div className="stream-unjoined-overlay">
           <Monitor size={40} color="var(--c-accent)" />
@@ -144,28 +148,13 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
         </div>
       )}
 
-      {/* Per-stream volume control for joined streams */}
       {isStreamActive && isStreamJoined && (
-        <div
-          className="stream-volume-control"
-          onMouseDown={(e) => e.stopPropagation()}
-          onClick={(e) => e.stopPropagation()}
-          onDoubleClick={(e) => e.stopPropagation()}
-        >
+        <div className="stream-volume-control" onMouseDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()} onDoubleClick={(e) => e.stopPropagation()}>
           {streamVolume > 0 ? <Volume2 size={14} /> : <VolumeX size={14} />}
-          <input
-            type="range"
-            min={0}
-            max={100}
-            value={streamVolume}
-            onChange={handleVolumeChange}
-            className="stream-volume-slider"
-            title={`Stream volume: ${streamVolume}%`}
-          />
+          <input type="range" min={0} max={100} value={streamVolume} onChange={handleVolumeChange} className="stream-volume-slider" title={`Stream volume: ${streamVolume}%`} />
         </div>
       )}
 
-      {/* Avatar Fallback */}
       {!hasVideo && (!isRemoteScreenShare || isStreamJoined) && (
         <div className="video-avatar">
           <div className="avatar-circle" style={{ background: color + '22', color }}>{label}</div>
@@ -180,17 +169,8 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
         </div>
       </div>
 
-      {/* Resize handle — bottom-right corner */}
       {!isStrip && (
-        <div
-          className="tile-resize-handle"
-          onMouseDown={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onResizeStart(uid, e.clientX, flexGrow);
-          }}
-          title="Drag to resize"
-        >
+        <div className="tile-resize-handle" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onResizeStart(uid, e.clientX, flexGrow); }} title="Drag to resize">
           <svg width="12" height="12" viewBox="0 0 10 10" fill="none">
             <path d="M9 1L1 9M9 5L5 9M9 9L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
           </svg>
@@ -751,21 +731,6 @@ export function CallView({ agora }) {
       {/* Normal grid mode — flex rows */}
       {!isFocused && !gameActive && (
         <div className={`video-grid relative ${agora.screenShareEnabled ? 'has-screen' : ''}`}>
-          
-          {/* FLOATING TRANSLATION SUBTITLE SCREEN PANELS */}
-          {agora.subtitles && agora.subtitles.length > 0 && (
-            <div className="absolute left-1/2 bottom-24 -translate-x-1/2 w-full max-w-2xl flex flex-col items-center gap-2 z-50 pointer-events-none px-4">
-              {agora.subtitles.map((sub, idx) => (
-                <div 
-                  key={idx} 
-                  className="bg-black/85 text-white font-semibold font-sans px-4 py-2 rounded-lg text-lg border border-white/10 shadow-2xl text-center select-none tracking-wide animate-fade-in"
-                  style={{ textShadow: '0 2px 4px rgba(0,0,0,0.9)' }}
-                >
-                  {sub.text}
-                </div>
-              ))}
-            </div>
-          )}
 
           {agora.screenShareEnabled && (
             <div className="screen-share-container">
