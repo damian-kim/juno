@@ -36,6 +36,7 @@ export function useAgora() {
   // to reliably distinguish a remote screen-share UID (mainUid + OFFSET)
   // from a regular participant who happens to have a large random UID.
   const mainUidsRef = useRef(new Set());
+  const [localUid, setLocalUid] = useState(null);
 
   const [joined,             setJoined]             = useState(false);
   const [isJoining,          setIsJoining]          = useState(false);
@@ -81,7 +82,7 @@ export function useAgora() {
   const startSubtitling = useCallback((targetTrackRef, sourceLanguage = "zh-CN", targetLanguage = "en") => {
     stopSubtitling();
     if (!targetTrackRef?.current) {
-      console.warn("⚠️ Subtitling block skipped: No target audio track reference passed.");
+      console.warn("⚠️ Subtitling skipped: No audio track reference.");
       return;
     }
 
@@ -89,19 +90,19 @@ export function useAgora() {
     audioWsRef.current = ws;
 
     ws.onopen = () => {
-      console.log(`🔌 WebSocket linked! Handshaking: ${sourceLanguage} -> ${targetLanguage}`);
-      
-      ws.send(JSON.stringify({ 
+      console.log(`🔌 WebSocket linked! ${sourceLanguage} -> ${targetLanguage}`);
+
+      ws.send(JSON.stringify({
         action: 'start',
-        sourceLanguage: sourceLanguage,
-        targetLanguage: targetLanguage
+        sourceLanguage,
+        targetLanguage,
       }));
 
-      const liveAudioTrack = localAudioTrackRef.current?.getMediaStreamTrack() 
+      const liveAudioTrack = localAudioTrackRef.current?.getMediaStreamTrack()
         || targetTrackRef?.current?.getMediaStreamTrack();
 
       if (!liveAudioTrack || liveAudioTrack.readyState !== "live") {
-        console.error("🔴 Subtitling Engine Failure: Hardware Microphone track is not active or missing!");
+        console.error("🔴 Mic track not active!");
         return;
       }
 
@@ -113,7 +114,7 @@ export function useAgora() {
         chosenMime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
       }
 
-      console.log(`📡 MediaRecorder spinning up smoothly using container profile: ${chosenMime}`);
+      console.log(`📡 MediaRecorder using: ${chosenMime}`);
       const recorder = new MediaRecorder(mediaStream, { mimeType: chosenMime });
       mediaRecorderRef.current = recorder;
 
@@ -132,30 +133,31 @@ export function useAgora() {
         const data = JSON.parse(event.data);
         if (data.type === 'subtitle') {
           const rawText = data.text;
-          const myUid = localUidRef.current || '__local__';
+          const myUid = String(localUidRef.current || '__local__');
 
-          // 1. Render locally on your own tile instantly via a keyed UID object state map
+          console.log('Setting subtitle for key:', myUid, 'text:', rawText);
+
+          // Show on local tile
           setSubtitles(prev => ({ ...prev, [myUid]: rawText }));
 
-          // 2. BROADCAST: Convert text to binary and broadcast to all remote peers via Agora
-          if (dataStreamIdRef.current && dataStreamIdRef.current !== true && clientRef.current) {
+          // Broadcast to remote peers via Agora stream message
+          // Web SDK 4.x: sendStreamMessage(Uint8Array, isSyncWithAudio)
+          // No createDataStream needed — call directly on client
+          if (clientRef.current?.connectionState === 'CONNECTED') {
             const encoder = new TextEncoder();
             const payload = encoder.encode(JSON.stringify({ uid: myUid, text: rawText }));
-            
-            try {
-              clientRef.current.sendStreamMessage(dataStreamIdRef.current, payload);
-            } catch (err) {
-              console.error("Failed to broadcast subtitle token stream packet:", err);
-            }
+            clientRef.current.sendStreamMessage(payload, false).catch(err => {
+              console.error("sendStreamMessage failed:", err);
+            });
           }
         }
       } catch (err) {
-        console.error("❌ Failed to process inbound socket subtitle chunk:", err);
+        console.error("❌ Failed to parse subtitle:", err);
       }
     };
 
-    ws.onerror = (error) => console.error("❌ Subtitle WebSocket operational exception:", error);
-    ws.onclose = () => console.log("🔒 Subtitle WebSocket loop successfully closed down.");
+    ws.onerror = (err) => console.error("❌ Subtitle WS error:", err);
+    ws.onclose = () => console.log("🔒 Subtitle WS closed.");
   }, [stopSubtitling]);
 
   const initClient = useCallback(() => {
@@ -169,9 +171,11 @@ export function useAgora() {
 
     // 👇 FIXED: Catch remote stream messages broadcasted by other players
     client.on("stream-message", (uid, payload) => {
+      console.log('Raw stream-message received from uid:', uid);
       try {
         const decoder = new TextDecoder("utf8");
         const subtitleData = JSON.parse(decoder.decode(payload));
+        console.log('Parsed subtitle data:', subtitleData);
         
         const speakerUid = String(subtitleData.uid);
         const textContent = subtitleData.text;
@@ -264,22 +268,17 @@ export function useAgora() {
       setError(null);
       const client = initClient();
 
-      // Fetch token for the main client (no UID specified → server picks one)
       const resp = await fetch(`${BACKEND_URL}/api/token?channelName=${channel}`);
       if (!resp.ok) throw new Error('Failed to fetch token.');
       const { token } = await resp.json();
 
-      // Join and capture the UID Agora assigns us
       const uid = await client.join(APP_ID, channel, token, null);
       localUidRef.current = uid;
+      setLocalUid(uid); // ← add this (see below)
 
-      // 👇 FIXED: Changed createDataStream to createCustomDataStream 
-      // Agora Web SDK requires passing config fields inside a wrapped object profile
-      const streamId = await client.createDataChannel({ 
-        reliable: true, 
-        ordered: true 
-      });
-      dataStreamIdRef.current = streamId;
+      // No createDataStream needed on Web SDK 4.x
+      // sendStreamMessage works directly on the client
+      dataStreamIdRef.current = true;
 
       const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
         microphoneId: selectedMic || undefined,
@@ -520,6 +519,6 @@ export function useAgora() {
     localVideoTrack:  localVideoTrackRef,
     localAudioTrack:  localAudioTrackRef,
     localScreenTrack: localScreenTrackRef,
-    localScreenAudioTrack: localScreenAudioTrackRef,
+    localScreenAudioTrack: localScreenAudioTrackRef, localUid
   };
 }

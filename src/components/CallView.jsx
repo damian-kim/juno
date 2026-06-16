@@ -47,10 +47,12 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
   const baseUid = isRemoteScreenShare ? Number(uid) - SCREEN_UID_OFFSET : uid;
 
   // Resolve target lookup key maps cleanly
-  const currentKey = isLocal ? (agora.joined ? String(agora.localVideoTrack?.current?._client?.uid || '__local__') : '__local__') : String(uid);
+  const currentKey = isLocal ? String(agora.localUid || '__local__') : String(uid);
   
   // Extract specific active text string matched to this tile card instance
   const currentSubtitleText = agora.subtitles?.[currentKey] || "";
+
+  console.log('VideoTile checking key:', currentKey, 'subtitles object:', agora.subtitles);
 
   const color = isLocal
     ? '#7c6dfa'
@@ -121,10 +123,10 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
         style={{ display: hasVideo && (!isRemoteScreenShare || isStreamJoined) ? 'block' : 'none' }}
       />
 
-      {/* 👇 NEW ABSOLUTE SUBTITLE CONTAINMENT MATRIX ANCHORED INSIDE THE TILE */}
+      {/* 👇 Subtitle overlay anchored inside the tile */}
       {currentSubtitleText && currentSubtitleText.trim().length > 0 && (
         <div 
-          className="absolute bottom-12 left-1/2 -translate-x-1/2 bg-black/80 text-white text-sm font-semibold font-sans px-3 py-1.5 rounded-md border border-white/10 max-w-[85%] text-center shadow-2xl z-40 animate-fade-in tracking-wide pointer-events-none select-none"
+          className="tile-subtitle"
           style={{ textShadow: '0 1px 3px rgba(0,0,0,0.9)' }}
         >
           {currentSubtitleText}
@@ -804,6 +806,7 @@ export function CallView({ agora }) {
             onClick={() => {
               if (!window.isCcActive) {
                 window.isCcActive = true;
+                console.log('Subtitle received from server:');
                 agora.startSubtitling(agora.localAudioTrack, window.ccFromLang || "zh-CN", window.ccToLang || "en");
               } else {
                 window.isCcActive = false;

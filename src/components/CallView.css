@@ -391,6 +391,7 @@
 }
 .tile-overlay > * { pointer-events: auto; }
 
+
 .tile-info {
   display: flex;
   align-items: center;
@@ -408,6 +409,28 @@
   color: var(--c-red);
   display: flex;
   align-items: center;
+}
+
+.tile-subtitle {
+  position: absolute;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  max-width: 85%;
+  text-align: center;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  z-index: 40;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  user-select: none;
+  animation: fade-in 0.2s ease;
 }
 
 /* ─── Screen share tile ───────────────────────────────────────────────────── */
