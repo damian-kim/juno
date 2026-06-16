@@ -750,7 +750,23 @@ export function CallView({ agora }) {
 
       {/* Normal grid mode — flex rows */}
       {!isFocused && !gameActive && (
-        <div className={`video-grid ${agora.screenShareEnabled ? 'has-screen' : ''}`}>
+        <div className={`video-grid relative ${agora.screenShareEnabled ? 'has-screen' : ''}`}>
+          
+          {/* FLOATING TRANSLATION SUBTITLE SCREEN PANELS */}
+          {agora.subtitles && agora.subtitles.length > 0 && (
+            <div className="absolute left-1/2 bottom-24 -translate-x-1/2 w-full max-w-2xl flex flex-col items-center gap-2 z-50 pointer-events-none px-4">
+              {agora.subtitles.map((sub, idx) => (
+                <div 
+                  key={idx} 
+                  className="bg-black/85 text-white font-semibold font-sans px-4 py-2 rounded-lg text-lg border border-white/10 shadow-2xl text-center select-none tracking-wide animate-fade-in"
+                  style={{ textShadow: '0 2px 4px rgba(0,0,0,0.9)' }}
+                >
+                  {sub.text}
+                </div>
+              ))}
+            </div>
+          )}
+
           {agora.screenShareEnabled && (
             <div className="screen-share-container">
               <ScreenTile key="screen-tile" getLocalScreenTrack={agora.getLocalScreenTrack} />
@@ -788,7 +804,53 @@ export function CallView({ agora }) {
         <div className="controls-left">
           <p className="text-muted text-xs">{totalInCall} in call</p>
         </div>
-        <div className="controls-center">
+        <div className="controls-center flex items-center gap-2">
+          {/* Audio Input Selection Matrix */}
+          <div className="flex flex-col text-[10px] text-zinc-400 bg-black/40 px-2 py-1 rounded border border-white/5">
+            <label className="font-mono">AUDIO FROM:</label>
+            <select 
+              value={window.ccFromLang || "zh-CN"} 
+              onChange={(e) => { window.ccFromLang = e.target.value; if(window.isCcActive) { agora.startSubtitling(agora.localAudioTrack, window.ccFromLang, window.ccToLang || "en"); } }}
+              className="bg-zinc-800 text-white text-xs rounded mt-0.5 outline-none cursor-pointer"
+            >
+              <option value="zh-CN">Chinese (zh-CN)</option>
+              <option value="en-US">English (en-US)</option>
+              <option value="ko">Korean (ko)</option>
+            </select>
+          </div>
+
+          {/* Translation Subtitle Target Selection Matrix */}
+          <div className="flex flex-col text-[10px] text-zinc-400 bg-black/40 px-2 py-1 rounded border border-white/5">
+            <label className="font-mono">SUBTITLE TO:</label>
+            <select 
+              value={window.ccToLang || "en"} 
+              onChange={(e) => { window.ccToLang = e.target.value; if(window.isCcActive) { agora.startSubtitling(agora.localAudioTrack, window.ccFromLang || "zh-CN", window.ccToLang); } }}
+              className="bg-zinc-800 text-white text-xs rounded mt-0.5 outline-none cursor-pointer"
+            >
+              <option value="en">English (en)</option>
+              <option value="zh-CN">Chinese (zh-CN)</option>
+              <option value="ko">Korean (ko)</option>
+            </select>
+          </div>
+
+          {/* Core Master CC Button Trigger */}
+          <button 
+            className={`ctrl-btn ${window.isCcActive ? 'active bg-purple-600' : 'off'}`}
+            onClick={() => {
+              if (!window.isCcActive) {
+                window.isCcActive = true;
+                agora.startSubtitling(agora.localAudioTrack, window.ccFromLang || "zh-CN", window.ccToLang || "en");
+              } else {
+                window.isCcActive = false;
+                agora.stopSubtitling();
+              }
+            }} 
+            title="Toggle Captions"
+          >
+            <span className="text-xs font-bold font-mono tracking-wider">CC</span>
+            <span className="ctrl-label">{window.isCcActive ? 'Captions On' : 'Captions Off'}</span>
+          </button>
+
           <button className={`ctrl-btn ${agora.micEnabled ? 'active' : 'off'}`}
             onClick={agora.toggleMic} title={agora.micEnabled ? 'Mute' : 'Unmute'}>
             {agora.micEnabled ? <Mic size={20} /> : <MicOff size={20} />}

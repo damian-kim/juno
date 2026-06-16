@@ -78,57 +78,88 @@ export function useAgora() {
     }
   }, []);
 
-  const startSubtitling = useCallback((targetTrackRef) => {
-    // Teardown any existing subtitling tracks or recorders before re-binding
+  const startSubtitling = useCallback((targetTrackRef, sourceLanguage = "zh-CN", targetLanguage = "en") => {
+    // 1. Teardown any existing subtitling tracks, recorders, or sockets before re-binding
     stopSubtitling();
-    if (!targetTrackRef?.current) return;
+    if (!targetTrackRef?.current) {
+      console.warn("⚠️ Subtitling block skipped: No target audio track reference passed.");
+      return;
+    }
 
-    // Use secure web sockets pointing to your production-mapped proxy domain layout
+    // 2. Initialize connection to your cloud pipeline proxy
     const ws = new WebSocket('wss://api.juno.rest');
     audioWsRef.current = ws;
 
     ws.onopen = () => {
-      // Send handshake initiation message string to configure Deepgram live endpoints
-      ws.send(JSON.stringify({ action: 'start' }));
+      console.log(`🔌 WebSocket linked! Handshaking: ${sourceLanguage} -> ${targetLanguage}`);
+      
+      // Send dynamic language variables directly up the pipeline initialization handshake
+      ws.send(JSON.stringify({ 
+        action: 'start',
+        sourceLanguage: sourceLanguage,
+        targetLanguage: targetLanguage
+      }));
 
-      // Access the underlying native MediaStreamTrack abstraction
-      const rawAudioTrack = targetTrackRef.current.getMediaStreamTrack();
-      const mediaStream = new MediaStream([rawAudioTrack]);
+      // Extract the underlying native hardware MediaStreamTrack abstraction safely
+      const liveAudioTrack = localAudioTrackRef.current?.getMediaStreamTrack() 
+        || targetTrackRef?.current?.getMediaStreamTrack();
 
-      // Slice the audio input container using native browser codec algorithms
-      const recorder = new MediaRecorder(mediaStream, { mimeType: 'audio/webm;codecs=opus' });
+      if (!liveAudioTrack || liveAudioTrack.readyState !== "live") {
+        console.error("🔴 Subtitling Engine Failure: Hardware Microphone track is not active or missing!");
+        return;
+      }
+
+      // Clone the track wrapper to prevent interfering with Agora's core WebRTC voice lane
+      const duplicatedTrack = liveAudioTrack.clone();
+      const mediaStream = new MediaStream([duplicatedTrack]);
+
+      // Fallback safety verification matching standard browser codec profiles
+      let chosenMime = 'audio/webm;codecs=opus';
+      if (!MediaRecorder.isTypeSupported(chosenMime)) {
+        chosenMime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/ogg';
+      }
+
+      console.log(`📡 MediaRecorder spinning up smoothly using container profile: ${chosenMime}`);
+      const recorder = new MediaRecorder(mediaStream, { mimeType: chosenMime });
       mediaRecorderRef.current = recorder;
 
       recorder.ondataavailable = async (e) => {
         if (e.data.size > 0 && ws.readyState === WebSocket.OPEN) {
-          // Convert binary blobs into raw ArrayBuffers for WebSocket transmission
+          // Flatten media chunks into raw ArrayBuffers for immediate transmission
           const buffer = await e.data.arrayBuffer();
           ws.send(buffer);
         }
       };
 
-      // Extract raw media fragments every 250ms for low-latency delivery
+      // Slice out clean 250ms binary chunks for low-latency delivery
       recorder.start(250);
     };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        if (data.type === 'subtitle' && dataStreamIdRef.current !== null) {
-          const payload = JSON.stringify({ uid: localUidRef.current, text: data.text });
+        if (data.type === 'subtitle') {
+          // Build out our text layout package 
+          const payload = { uid: localUidRef.current || 'Local', text: data.text };
           
-          // Broadcast subtitle packet over Agora direct low-latency DataStream line
-          clientRef.current?.sendStreamMessage(dataStreamIdRef.current, payload);
-          
-          // Render locally within state vectors simultaneously
+          // Render straight into our local state frame to guarantee instant display
           setSubtitles(prev => {
-            const combined = [...prev, JSON.parse(payload)];
+            const combined = [...prev, payload];
+            // Keep a floating backlog layout frame of the last 3 transcript strings
             return combined.length > 3 ? combined.slice(combined.length - 3) : combined;
           });
         }
       } catch (err) {
-        console.error("Failed to process inbound socket subtitle chunk:", err);
+        console.error("❌ Failed to process inbound socket subtitle chunk:", err);
       }
+    };
+
+    ws.onerror = (error) => {
+      console.error("❌ Subtitle WebSocket encountered an operational exception:", error);
+    };
+
+    ws.onclose = () => {
+      console.log("🔒 Subtitle WebSocket loop successfully closed down.");
     };
   }, [stopSubtitling]);
 
@@ -253,10 +284,7 @@ export function useAgora() {
       const uid = await client.join(APP_ID, channel, token, null);
       localUidRef.current = uid;
 
-      // FIXED CRITICAL METHOD NAME AND TIMING GAP:
-      // In Web SDK NG, the method name is createCustomDataStream.
-      // Must only be called AFTER client.join has completely finished executing.
-      dataStreamIdRef.current = client.createCustomDataStream({ syncWithAudio: true });
+      dataStreamIdRef.current = true;
 
       const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
         microphoneId: selectedMic || undefined,
