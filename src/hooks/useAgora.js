@@ -275,7 +275,10 @@ export function useAgora() {
 
       // 👇 FIXED: Changed createDataStream to createCustomDataStream 
       // Agora Web SDK requires passing config fields inside a wrapped object profile
-      const streamId = await client.createCustomDataStream({ reliable: true, ordered: true });
+      const streamId = await client.createDataChannel({ 
+        reliable: true, 
+        ordered: true 
+      });
       dataStreamIdRef.current = streamId;
 
       const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
