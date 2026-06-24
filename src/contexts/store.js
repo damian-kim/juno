@@ -216,38 +216,67 @@ export const useAppStore = create((set, get) => ({
     { id: 'gaming',        name: 'gaming',        type: 'voice', members: 7 },
     { id: 'study-room',    name: 'study room',    type: 'voice', members: 2 },
     { id: 'chill-beats',   name: 'chill beats',   type: 'voice', members: 0 },
+    { id: 'general-chat',  name: 'general-chat',  type: 'text',  members: 0 },
     { id: 'announcements', name: 'announcements', type: 'text',  members: 0 },
   ],
 
   channelUsers: [],
 
   // ── Text channel messages ──────────────────────────────────────────────────────
-  messages: {},
+  messages: (() => {
+    try {
+      const saved = localStorage.getItem('juno_messages');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    
+    // Default initial mock messages
+    return {
+      'general-chat': [
+        { id: 'init-1', channelId: 'general-chat', author: 'System', text: 'Welcome to the #general-chat channel! 🚀 Feel free to say hi.', timestamp: Date.now() - 3600000 * 2, edited: false },
+        { id: 'init-2', channelId: 'general-chat', author: 'Alex', text: 'Hey everyone, glad we finally have a general text chat here! 🎉', timestamp: Date.now() - 3600000, edited: false },
+      ],
+      'announcements': [
+        { id: 'init-3', channelId: 'announcements', author: 'Admin', text: 'Welcome to the Announcements channel. Important updates will be posted here.', timestamp: Date.now() - 3600000 * 24, edited: false },
+      ]
+    };
+  })(),
   sendMessage: (channelId, text) => {
     const id = Date.now() + Math.random();
     const author = get().user.name;
-    set(s => ({
-      messages: {
+    set(s => {
+      const nextMessages = {
         ...s.messages,
         [channelId]: [...(s.messages[channelId] || []), { id, channelId, author, text, timestamp: Date.now(), edited: false }],
-      },
-    }));
+      };
+      try {
+        localStorage.setItem('juno_messages', JSON.stringify(nextMessages));
+      } catch (e) {}
+      return { messages: nextMessages };
+    });
   },
   deleteMessage: (channelId, msgId) => {
-    set(s => ({
-      messages: {
+    set(s => {
+      const nextMessages = {
         ...s.messages,
         [channelId]: (s.messages[channelId] || []).filter(m => m.id !== msgId),
-      },
-    }));
+      };
+      try {
+        localStorage.setItem('juno_messages', JSON.stringify(nextMessages));
+      } catch (e) {}
+      return { messages: nextMessages };
+    });
   },
   editMessage: (channelId, msgId, newText) => {
-    set(s => ({
-      messages: {
+    set(s => {
+      const nextMessages = {
         ...s.messages,
         [channelId]: (s.messages[channelId] || []).map(m => m.id === msgId ? { ...m, text: newText, edited: true } : m),
-      },
-    }));
+      };
+      try {
+        localStorage.setItem('juno_messages', JSON.stringify(nextMessages));
+      } catch (e) {}
+      return { messages: nextMessages };
+    });
   },
 
   // ── Grid customization ─────────────────────────────────────────────────────────

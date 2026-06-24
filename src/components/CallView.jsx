@@ -38,7 +38,7 @@ function hashCode(str) {
 }
 
 // ─── Video tile with resize handle ─────────────────────────────────────────────
-function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleClick, isFocused, isStrip, isStreamJoined, onJoinStream, onStreamVolumeChange }) {
+function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleClick, isFocused, isStrip, isStreamJoined, onJoinStream, onStreamVolumeChange, popoutActive }) {
   const videoRef = useRef(null);
   const [streamVolume, setStreamVolume] = useState(100);
 
@@ -85,6 +85,14 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
   useEffect(() => {
     if (!hasVideo || !videoRef.current) return;
     if (isRemoteScreenShare && !isStreamJoined) return;
+    if (popoutActive) {
+      if (isLocal) {
+        try { localVideoTrack?.stop?.(); } catch {}
+      } else {
+        try { remoteVideoTrack?.stop?.(); } catch {}
+      }
+      return;
+    }
 
     if (isLocal) {
       let attempts = 0;
@@ -99,14 +107,18 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
         if (attempts++ < 30) timeoutId = setTimeout(tryPlay, 100);
       };
       tryPlay();
-      return () => { isMounted = false; if (timeoutId) clearTimeout(timeoutId); };
+      return () => { 
+        isMounted = false; 
+        if (timeoutId) clearTimeout(timeoutId); 
+        try { localVideoTrack?.stop?.(); } catch {}
+      };
     } else {
       if (remoteVideoTrack && videoRef.current) {
         try { remoteVideoTrack.play(videoRef.current); } catch {}
       }
       return () => { try { remoteVideoTrack?.stop?.(); } catch {} };
     }
-  }, [hasVideo, isLocal, localVideoTrack, remoteVideoTrack, isRemoteScreenShare, isStreamJoined]);
+  }, [hasVideo, isLocal, localVideoTrack, remoteVideoTrack, isRemoteScreenShare, isStreamJoined, popoutActive]);
 
   const tileStyle = isStrip ? {} : { flex: flexGrow, minWidth: 0 };
 
@@ -122,7 +134,7 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
         autoPlay
         muted={isLocal}
         playsInline
-        style={{ display: hasVideo && (!isRemoteScreenShare || isStreamJoined) ? 'block' : 'none' }}
+        style={{ display: hasVideo && (!isRemoteScreenShare || isStreamJoined) && !popoutActive ? 'block' : 'none' }}
       />
 
       {/* 👇 Subtitle overlay anchored inside the tile */}
@@ -159,7 +171,7 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
         </div>
       )}
 
-      {!hasVideo && (!isRemoteScreenShare || isStreamJoined) && (
+      {(!hasVideo || popoutActive) && (!isRemoteScreenShare || isStreamJoined) && (
         <div className="video-avatar">
           <div className="avatar-circle" style={{ background: color + '22', color }}>{label}</div>
           <p className="avatar-name">{name}</p>
@@ -353,7 +365,11 @@ function PopoutVideoTile({ isLocal, agora, user, label, name, color }) {
         if (attempts++ < 30) tid = setTimeout(tryPlay, 100);
       };
       tryPlay();
-      return () => { mounted = false; if (tid) clearTimeout(tid); };
+      return () => { 
+        mounted = false; 
+        if (tid) clearTimeout(tid); 
+        try { localVideoTrack?.stop?.(); } catch {}
+      };
     } else {
       if (remoteVideoTrack && videoRef.current) {
         try { remoteVideoTrack.play(videoRef.current); } catch {}
@@ -667,6 +683,7 @@ export function CallView({ agora }) {
           isStrip={variant === 'strip'}
           isStreamJoined={joinedStreams.has(uid)}
           onJoinStream={handleJoinStream}
+          popoutActive={popoutActive}
         />
       </div>
     );
@@ -760,8 +777,8 @@ export function CallView({ agora }) {
             {orderedTiles.map((tile, idx) => (
               <div key={tile.uid} className="video-tile strip-tile compact">
                 {tile.type === 'local'
-                  ? <VideoTile uid={tile.uid} type="local" agora={agora} flexGrow={1} onResizeStart={() => {}} onDoubleClick={() => {}} isStrip />
-                  : <VideoTile uid={tile.uid} type="remote" user={tile.user} flexGrow={1} onResizeStart={() => {}} onDoubleClick={() => {}} isStrip />
+                  ? <VideoTile uid={tile.uid} type="local" agora={agora} flexGrow={1} onResizeStart={() => {}} onDoubleClick={() => {}} isStrip popoutActive={popoutActive} />
+                  : <VideoTile uid={tile.uid} type="remote" user={tile.user} flexGrow={1} onResizeStart={() => {}} onDoubleClick={() => {}} isStrip popoutActive={popoutActive} />
                 }
               </div>
             ))}
