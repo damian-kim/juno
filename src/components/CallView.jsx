@@ -79,6 +79,9 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
     }
   }, [user?.audioTrack, isStreamJoined]);
 
+  const localVideoTrack = agora.localVideoTrack?.current;
+  const remoteVideoTrack = user?.videoTrack;
+
   useEffect(() => {
     if (!hasVideo || !videoRef.current) return;
     if (isRemoteScreenShare && !isStreamJoined) return;
@@ -89,9 +92,8 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
       let isMounted = true;
       const tryPlay = () => {
         if (!isMounted) return;
-        const track = agora.localVideoTrack?.current;
-        if (track && videoRef.current) {
-          try { track.play(videoRef.current); } catch {}
+        if (localVideoTrack && videoRef.current) {
+          try { localVideoTrack.play(videoRef.current); } catch {}
           return;
         }
         if (attempts++ < 30) timeoutId = setTimeout(tryPlay, 100);
@@ -99,12 +101,12 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
       tryPlay();
       return () => { isMounted = false; if (timeoutId) clearTimeout(timeoutId); };
     } else {
-      if (user?.videoTrack && videoRef.current) {
-        try { user.videoTrack.play(videoRef.current); } catch {}
+      if (remoteVideoTrack && videoRef.current) {
+        try { remoteVideoTrack.play(videoRef.current); } catch {}
       }
-      return () => { try { user?.videoTrack?.stop?.(); } catch {} };
+      return () => { try { remoteVideoTrack?.stop?.(); } catch {} };
     }
-  }, [hasVideo, isLocal, agora, user, isRemoteScreenShare, isStreamJoined]);
+  }, [hasVideo, isLocal, localVideoTrack, remoteVideoTrack, isRemoteScreenShare, isStreamJoined]);
 
   const tileStyle = isStrip ? {} : { flex: flexGrow, minWidth: 0 };
 
@@ -332,6 +334,8 @@ function PopoutContent({ agora }) {
 function PopoutVideoTile({ isLocal, agora, user, label, name, color }) {
   const videoRef = useRef(null);
   const hasVideo = isLocal ? agora.cameraEnabled : user?.hasVideo;
+  const localVideoTrack = agora.localVideoTrack?.current;
+  const remoteVideoTrack = user?.videoTrack;
 
   useEffect(() => {
     if (!hasVideo || !videoRef.current) return;
@@ -342,9 +346,8 @@ function PopoutVideoTile({ isLocal, agora, user, label, name, color }) {
       let mounted = true;
       const tryPlay = () => {
         if (!mounted) return;
-        const track = agora.localVideoTrack?.current;
-        if (track && videoRef.current) {
-          try { track.play(videoRef.current); } catch {}
+        if (localVideoTrack && videoRef.current) {
+          try { localVideoTrack.play(videoRef.current); } catch {}
           return;
         }
         if (attempts++ < 30) tid = setTimeout(tryPlay, 100);
@@ -352,12 +355,12 @@ function PopoutVideoTile({ isLocal, agora, user, label, name, color }) {
       tryPlay();
       return () => { mounted = false; if (tid) clearTimeout(tid); };
     } else {
-      if (user?.videoTrack && videoRef.current) {
-        try { user.videoTrack.play(videoRef.current); } catch {}
+      if (remoteVideoTrack && videoRef.current) {
+        try { remoteVideoTrack.play(videoRef.current); } catch {}
       }
-      return () => { try { user?.videoTrack?.stop?.(); } catch {} };
+      return () => { try { remoteVideoTrack?.stop?.(); } catch {} };
     }
-  }, [hasVideo, isLocal, agora, user]);
+  }, [hasVideo, isLocal, localVideoTrack, remoteVideoTrack]);
 
   return (
     <div style={{
