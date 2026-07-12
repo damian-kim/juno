@@ -591,7 +591,7 @@ export function CallView({ agora }) {
         } catch {}
       }
 
-      pipWindow.document.title = 'Juno — Call Popout';
+      pipWindow.document.title = 'JUNO — Call Popout';
       pipWindow.document.body.style.cssText = 'margin:0;overflow:hidden;';
       const rootEl = pipWindow.document.createElement('div');
       rootEl.style.cssText = 'height:100vh;';
@@ -794,7 +794,7 @@ export function CallView({ agora }) {
         <div className="controls-center flex items-center gap-2">
           {/* Audio Input Selection Matrix */}
           <div className="flex flex-col text-[10px] text-zinc-400 bg-black/40 px-2 py-1 rounded border border-white/5">
-            <label className="font-mono">AUDIO FROM:</label>
+            <label className="tracking-wider">AUDIO FROM:</label>
             <select 
               value={window.ccFromLang || "zh-CN"} 
               onChange={(e) => { window.ccFromLang = e.target.value; if(window.isCcActive) { agora.startSubtitling(agora.localAudioTrack, window.ccFromLang, window.ccToLang || "en"); } }}
@@ -808,7 +808,7 @@ export function CallView({ agora }) {
 
           {/* Translation Subtitle Target Selection Matrix */}
           <div className="flex flex-col text-[10px] text-zinc-400 bg-black/40 px-2 py-1 rounded border border-white/5">
-            <label className="font-mono">SUBTITLE TO:</label>
+            <label className="tracking-wider">SUBTITLE TO:</label>
             <select 
               value={window.ccToLang || "en"} 
               onChange={(e) => { window.ccToLang = e.target.value; if(window.isCcActive) { agora.startSubtitling(agora.localAudioTrack, window.ccFromLang || "zh-CN", window.ccToLang); } }}
@@ -835,7 +835,7 @@ export function CallView({ agora }) {
             }} 
             title="Toggle Captions"
           >
-            <span className="text-xs font-bold font-mono tracking-wider">CC</span>
+            <span className="text-xs font-bold tracking-wider">CC</span>
             <span className="ctrl-label">{window.isCcActive ? 'Captions On' : 'Captions Off'}</span>
           </button>
 

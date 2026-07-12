@@ -7,10 +7,31 @@ const ACCENTS = {
   green:  { accent: '#3dd68c', accentHover: '#5fdf9f', accentDim: 'rgba(61,214,140,0.15)',  accentGlow: 'rgba(61,214,140,0.3)'  },
   rose:   { accent: '#f04d87', accentHover: '#f572a0', accentDim: 'rgba(240,77,135,0.15)',  accentGlow: 'rgba(240,77,135,0.3)'  },
   amber:  { accent: '#f5a623', accentHover: '#f7bb57', accentDim: 'rgba(245,166,35,0.15)',  accentGlow: 'rgba(245,166,35,0.3)'  },
+  orange: { accent: '#FF6700', accentHover: '#E05B00', accentDim: 'rgba(255,103,0,0.15)',  accentGlow: 'rgba(255,103,0,0.3)'   },
 };
 
 // ─── Color mode palettes ──────────────────────────────────────────────────────
 const COLOR_MODES = {
+  xiaomi: {
+    '--c-bg-base':     '#F9F6F3',
+    '--c-bg-raised':   '#EBE5DC',
+    '--c-bg-elevated': '#F3EEE8',
+    '--c-bg-overlay':  '#E3DDD3',
+    '--c-bg-hover':    'rgba(207, 199, 186, 0.4)',
+    '--c-border':      '#DFD8CD',
+    '--c-border-hover':'#CFC7BA',
+    '--c-border-focus':'#FF6700',
+    '--c-text-primary':'#1D0601',
+    '--c-text-secondary':'rgba(29, 6, 1, 0.7)',
+    '--c-text-muted':  '#8E8880',
+    '--c-green':       '#1ea860',
+    '--c-green-dim':   'rgba(30,168,96,0.12)',
+    '--c-red':         '#d63030',
+    '--c-red-dim':     'rgba(214,48,48,0.12)',
+    '--c-yellow':      '#c88a00',
+    '--c-yellow-dim':  'rgba(200,138,0,0.12)',
+    '--c-blue':        '#2266cc',
+  },
   dark: {
     '--c-bg-base':     '#0e0f14',
     '--c-bg-raised':   '#13141b',
@@ -158,10 +179,10 @@ export const useAppStore = create((set, get) => ({
   setChannel: (id, name) => set({ currentChannel: id, currentChannelName: name }),
 
   // ── Theme system ─────────────────────────────────────────────────────────────
-  colorMode: 'dark',       // dark | light | oled | frosted | midnight
-  accent: 'violet',        // violet | cyan | green | rose | amber
+  colorMode: 'xiaomi',       // xiaomi | dark | light | oled | frosted | midnight
+  accent: 'orange',        // orange | violet | cyan | green | rose | amber
   radius: 'rounded',       // rounded | sharp | soft
-  font: 'mono',            // mono | sans | rounded
+  font: 'sans',            // mono | sans | rounded
   colorModes: Object.keys(COLOR_MODES),
   accents: Object.keys(ACCENTS),
   radiusPresets: Object.keys(RADIUS_PRESETS),
@@ -212,9 +233,9 @@ export const useAppStore = create((set, get) => ({
 
   // ── Channels ─────────────────────────────────────────────────────────────────
   channels: [
-    { id: 'general',       name: 'general',       type: 'voice', members: 3 },
-    { id: 'gaming',        name: 'gaming',        type: 'voice', members: 7 },
-    { id: 'study-room',    name: 'study room',    type: 'voice', members: 2 },
+    { id: 'general',       name: 'general',       type: 'voice', members: 0 },
+    { id: 'gaming',        name: 'gaming',        type: 'voice', members: 0 },
+    { id: 'study-room',    name: 'study room',    type: 'voice', members: 0 },
     { id: 'chill-beats',   name: 'chill beats',   type: 'voice', members: 0 },
     { id: 'general-chat',  name: 'general-chat',  type: 'text',  members: 0 },
     { id: 'announcements', name: 'announcements', type: 'text',  members: 0 },

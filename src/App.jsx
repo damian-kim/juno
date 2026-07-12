@@ -2,7 +2,7 @@ import './styles/globals.css';
 import { useEffect } from 'react';
 import { useAgora } from './hooks/useAgora';
 import { useAppStore } from './contexts/store';
-import { Sidebar } from './components/Sidebar';
+import { FloatingDock } from './components/FloatingDock';
 import { HomeView } from './components/HomeView';
 import { CallView } from './components/CallView';
 import { TextChannel } from './components/TextChannel';
@@ -28,8 +28,6 @@ export default function App() {
         position: 'relative',
       }}
     >
-      <Sidebar agora={agora} />
-
       <main
         style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}
         role="main"
@@ -38,6 +36,8 @@ export default function App() {
         {currentView === 'call' && <CallView agora={agora} />}
         {currentView === 'text' && <TextChannel />}
       </main>
+
+      <FloatingDock agora={agora} />
 
       <SettingsModal agora={agora} />
       <Notifications />

@@ -1,4 +1,4 @@
-import { Hash, Mic, MicOff, Settings, Users, Volume2, Wifi, Gamepad2 } from 'lucide-react';
+import { Hash, Mic, MicOff, Settings, Users, Volume2, Wifi, Gamepad2, Radio } from 'lucide-react';
 import { useAppStore } from '../contexts/store';
 import './Sidebar.css';
 
@@ -28,7 +28,7 @@ function ChannelItem({ channel, active, onJoin }) {
 
 export function Sidebar({ agora }) {
   const {
-    channels, currentChannel, setChannel, setView,
+    channels, currentChannel, currentChannelName, setChannel, setView,
     openSettings, user, channelUsers, currentView,
     gameActive, gamePlayers, gameStatus, joinGame,
   } = useAppStore();
@@ -48,10 +48,21 @@ export function Sidebar({ agora }) {
     }
   };
 
+  const totalVoiceUsers = channels
+    .filter(c => c.type === 'voice')
+    .reduce((acc, c) => acc + (c.members || 0), 0);
+
   return (
     <aside className="sidebar">
       {/* Server header */}
-      <div className="sidebar-header">
+      <div 
+        className="sidebar-header clickable"
+        onClick={() => {
+          setView('home');
+          setChannel(null, '');
+        }}
+        title="Go to Voice Canvas"
+      >
         <div className="server-icon">
           <span className="font-mono">J</span>
         </div>
@@ -67,19 +78,26 @@ export function Sidebar({ agora }) {
         </div>
       </div>
 
+      {/* Main Navigation (Voice Hub) */}
+      <div className="sidebar-section" style={{ paddingBottom: 0 }}>
+        <button
+          className={`nav-item ${currentView === 'home' ? 'active' : ''}`}
+          onClick={() => {
+            setView('home');
+            setChannel(null, '');
+          }}
+        >
+          <Radio size={15} className={`nav-icon ${currentView === 'home' ? 'pulse-icon' : ''}`} aria-hidden />
+          <span className="nav-item-name font-mono">Voice Canvas</span>
+          {totalVoiceUsers > 0 && (
+            <span className="voice-badge-count font-mono">{totalVoiceUsers}</span>
+          )}
+        </button>
+      </div>
+
       {/* Channels */}
       <div className="sidebar-section">
-        <p className="section-label">Voice Channels</p>
-        {channels.filter(c => c.type === 'voice').map(ch => (
-          <ChannelItem
-            key={ch.id}
-            channel={ch}
-            active={currentChannel === ch.id}
-            onJoin={handleJoinChannel}
-          />
-        ))}
-
-        <p className="section-label" style={{ marginTop: 16 }}>Text Channels</p>
+        <p className="section-label">Text Channels</p>
         {channels.filter(c => c.type === 'text').map(ch => (
           <ChannelItem
             key={ch.id}
@@ -91,9 +109,20 @@ export function Sidebar({ agora }) {
       </div>
 
       {/* Active users in call */}
-      {currentView === 'call' && (
+      {(currentView === 'call' || agora.joined) && currentChannel && (
         <div className="sidebar-section active-users">
-          <p className="section-label">in voice · {currentChannel || 'general'}</p>
+          <div className="section-label-row flex items-center justify-between" style={{ padding: '4px 6px' }}>
+            <p className="section-label" style={{ padding: 0 }}>in voice · {currentChannelName}</p>
+            {currentView !== 'call' && (
+              <button
+                className="view-call-link text-xs font-mono"
+                onClick={() => setView('call')}
+                style={{ color: 'var(--c-accent)', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
+              >
+                [view]
+              </button>
+            )}
+          </div>
 
           {/* Game indicator */}
           {gameActive && (

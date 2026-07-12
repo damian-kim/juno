@@ -454,7 +454,7 @@ function ThemeTab() {
         <div className="theme-preview-card">
           <div className="tp-header">
             <div className="tp-dot" style={{ background: 'var(--c-accent)' }} />
-            <span className="tp-title font-mono" style={{ color: 'var(--c-accent)' }}>juno</span>
+            <span className="tp-title" style={{ color: 'var(--c-accent)' }}>JUNO</span>
           </div>
           <div className="tp-row">
             <div className="tp-avatar" />

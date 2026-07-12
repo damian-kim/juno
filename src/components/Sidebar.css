@@ -17,7 +17,77 @@
   gap: 10px;
   padding: 14px 14px 10px;
   border-bottom: 1px solid var(--c-border);
+  transition: background var(--t-fast);
 }
+
+.sidebar-header.clickable {
+  cursor: pointer;
+}
+
+.sidebar-header.clickable:hover {
+  background: var(--c-bg-hover);
+}
+
+/* Nav Item styling for Voice Hub */
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  border-radius: var(--r-md);
+  color: var(--c-text-secondary);
+  font-size: 13.5px;
+  text-align: left;
+  background: transparent;
+  border: none;
+  transition: all var(--t-fast);
+  cursor: pointer;
+}
+
+.nav-item:hover {
+  background: var(--c-bg-elevated);
+  color: var(--c-text-primary);
+}
+
+.nav-item.active {
+  background: var(--c-accent-dim);
+  color: var(--c-accent);
+  border: 1px solid var(--c-accent-glow);
+}
+
+.nav-icon {
+  flex-shrink: 0;
+}
+
+.pulse-icon {
+  animation: pulse-glow 2s infinite ease-in-out;
+}
+
+.voice-badge-count {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 700;
+  background: var(--c-accent);
+  color: #fff;
+  padding: 2px 6px;
+  border-radius: var(--r-pill);
+  box-shadow: 0 0 8px var(--c-accent-glow);
+}
+
+@keyframes pulse-glow {
+  0%, 100% {
+    opacity: 0.7;
+    transform: scale(0.95);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+    filter: drop-shadow(0 0 4px var(--c-accent));
+  }
+}
+
 
 .server-icon {
   width: 34px;

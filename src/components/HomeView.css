@@ -4,6 +4,7 @@
   display: flex;
   flex-direction: column;
   gap: 0;
+  padding-bottom: 96px;
 }
 
 /* Hero */
@@ -173,7 +174,300 @@
   box-shadow: 0 0 14px var(--c-accent-glow);
   transition: background var(--t-fast), box-shadow var(--t-fast), transform var(--t-fast);
 }
-.join-btn:hover {
-  background: var(--c-accent-hover);
-  box-shadow: 0 0 20px var(--c-accent-glow);
+
+/* ==========================================================================
+   Voice Canvas Redesign
+   ========================================================================== */
+
+.voice-canvas {
+  position: relative;
+  width: 100%;
+  height: 480px;
+  background-color: var(--c-bg-raised);
+  background-image: 
+    linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-position: center;
+  border: 1px solid var(--c-border);
+  border-radius: var(--r-xl);
+  overflow: hidden;
+  box-shadow: inset 0 0 40px rgba(0, 0, 0, 0.6);
+  user-select: none;
+  animation: fade-in 0.4s ease both;
+  margin-top: 15px;
 }
+
+.canvas-glow {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 320px;
+  height: 320px;
+  background: radial-gradient(circle, var(--c-accent-glow) 0%, transparent 70%);
+  opacity: 0.6;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.canvas-svg-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.pulse-path {
+  stroke-dashoffset: 40;
+  animation: dash 1.8s linear infinite;
+  filter: drop-shadow(0 0 3px var(--c-accent));
+}
+
+@keyframes dash {
+  to {
+    stroke-dashoffset: -40;
+  }
+}
+
+/* Voice Pod Node style (the channel circles/cards) */
+.voice-pod-node {
+  position: absolute;
+  z-index: 3;
+  cursor: pointer;
+  width: 140px;
+  padding: 14px;
+  border-radius: var(--r-lg);
+  background: rgba(26, 27, 36, 0.62) !important;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+  transition: transform var(--t-mid), border-color var(--t-fast), background var(--t-fast), box-shadow var(--t-mid);
+}
+
+/* Mouse-following radial glow within each card (Kokonut UI signature) */
+.kokonut-card-glow-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    90px circle at var(--mouse-x, 0px) var(--mouse-y, 0px),
+    rgba(107, 122, 238, 0.12),
+    transparent 80%
+  );
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 0;
+}
+
+.voice-pod-node:hover .kokonut-card-glow-overlay {
+  opacity: 1;
+}
+
+/* Small float effect on hover */
+.voice-pod-node:hover {
+  border-color: var(--c-accent) !important;
+  background: rgba(33, 34, 46, 0.75) !important;
+  transform: translate(-50%, -54%) scale(1.04) !important;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5), 0 0 14px var(--c-accent-glow);
+}
+
+.voice-pod-node.joined {
+  border-color: var(--c-green) !important;
+  box-shadow: 0 0 20px var(--c-green-dim);
+}
+
+.voice-pod-node.connecting {
+  border-color: var(--c-yellow) !important;
+  animation: pod-pulse 1s infinite alternate;
+}
+
+@keyframes pod-pulse {
+  to {
+    box-shadow: 0 0 20px var(--c-yellow-dim);
+    border-color: var(--c-yellow-dim) !important;
+  }
+}
+
+.pod-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  text-align: center;
+  position: relative;
+  z-index: 1;
+}
+
+.pod-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--c-text-primary);
+}
+
+.pod-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--c-accent);
+}
+
+.pod-name {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Waveform inside Pod */
+.pod-waveform {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  height: 18px;
+}
+
+.wave-bar {
+  width: 2.5px;
+  height: 3px;
+  background: var(--c-text-muted);
+  border-radius: 1px;
+  transition: background var(--t-fast), height var(--t-fast);
+}
+
+.wave-bar.active {
+  background: var(--c-accent);
+  height: 14px;
+  animation: wave-bounce 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes wave-bounce {
+  0% {
+    transform: scaleY(0.2);
+  }
+  100% {
+    transform: scaleY(1);
+  }
+}
+
+.pod-members {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.pod-empty-text {
+  font-size: 9.5px;
+  color: var(--c-text-muted);
+  letter-spacing: 0.02em;
+}
+
+.members-avatars {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 6px;
+}
+
+.member-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  margin-left: -6px;
+  border: 1.5px solid var(--c-bg-elevated);
+  transition: transform var(--t-fast);
+}
+.member-dot:hover {
+  transform: translateY(-2px) scale(1.1);
+  z-index: 10;
+}
+
+.member-dot-more {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--c-bg-overlay);
+  border: 1.5px solid var(--c-bg-elevated);
+  color: var(--c-text-secondary);
+  font-size: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: -6px;
+}
+
+/* Local User Node style */
+.local-user-node {
+  position: absolute;
+  z-index: 5;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--c-bg-elevated);
+  border: 2px solid var(--c-accent);
+  box-shadow: 0 0 18px var(--c-accent-glow);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Disable left/top transitions so anime.js scripts them smoothly */
+  transition: transform 0.3s, border-color 0.4s, box-shadow 0.4s, opacity 0.3s;
+  pointer-events: none;
+}
+
+.local-user-node.docked {
+  border-color: var(--c-green);
+  box-shadow: 0 0 24px var(--c-green-dim);
+  width: 34px;
+  height: 34px;
+}
+
+.local-user-node.sliding {
+  box-shadow: 0 0 30px var(--c-accent);
+}
+
+.local-user-glow {
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2.5px solid var(--c-accent);
+  opacity: 0.4;
+  animation: local-user-pulse 2s infinite ease-out;
+}
+
+@keyframes local-user-pulse {
+  0% {
+    transform: scale(0.9);
+    opacity: 0.6;
+  }
+  100% {
+    transform: scale(1.3);
+    opacity: 0;
+  }
+}
+
+.local-user-avatar {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--c-accent);
+}
+
+.local-user-label {
+  position: absolute;
+  bottom: -20px;
+  font-size: 10px;
+  color: var(--c-accent);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
