@@ -49,6 +49,7 @@ export function useAgora() {
   const [outputVolume,       setOutputVolume]       = useState(100);
   const [networkQuality,     setNetworkQuality]     = useState(null);
   const [error,              setError]              = useState(null);
+  const [ping,               setPing]               = useState(0);
 
   const [audioDevices,   setAudioDevices]   = useState([]);
   const [videoDevices,   setVideoDevices]   = useState([]);
@@ -174,14 +175,19 @@ export function useAgora() {
       console.log('Raw stream-message received from uid:', uid);
       try {
         const decoder = new TextDecoder("utf8");
-        const subtitleData = JSON.parse(decoder.decode(payload));
-        console.log('Parsed subtitle data:', subtitleData);
+        const msg = JSON.parse(decoder.decode(payload));
+        console.log('Parsed stream message data:', msg);
         
-        const speakerUid = String(subtitleData.uid);
-        const textContent = subtitleData.text;
-
-        // Map the subtitle text directly to the specific speaker's UID key
-        setSubtitles(prev => ({ ...prev, [speakerUid]: textContent }));
+        if (msg.type === 'chess-move') {
+          window.dispatchEvent(new CustomEvent('chess-move-sync', { detail: msg }));
+        } else if (msg.type === 'crossword-sync') {
+          window.dispatchEvent(new CustomEvent('crossword-sync-evt', { detail: msg }));
+        } else if (msg.type === 'pomodoro-sync') {
+          window.dispatchEvent(new CustomEvent('pomodoro-sync-evt', { detail: msg }));
+        } else if (msg.text !== undefined) {
+          const speakerUid = String(msg.uid);
+          setSubtitles(prev => ({ ...prev, [speakerUid]: msg.text }));
+        }
       } catch (e) { 
         console.warn("Malformed synchronized data stream frame drop:", e); 
       }
@@ -242,6 +248,26 @@ export function useAgora() {
     clientRef.current = client;
     return client;
   }, [applyOutputVolume, outputVolume]);
+
+  useEffect(() => {
+    if (!joined) {
+      setPing(0);
+      return;
+    }
+    const interval = setInterval(() => {
+      try {
+        if (clientRef.current) {
+          const stats = clientRef.current.getRTCStats();
+          if (stats && stats.RTT !== undefined) {
+            setPing(stats.RTT);
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to get RTC stats:", e);
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [joined]);
 
   const loadDevices = useCallback(async () => {
     try {
@@ -499,6 +525,16 @@ export function useAgora() {
   const playLocalVideo  = useCallback((el) => { const t = localVideoTrackRef.current;  if (t && el) try { t.play(el); } catch {} }, []);
   const playLocalScreen = useCallback((el) => { const t = localScreenTrackRef.current; if (t && el) try { t.play(el); } catch {} }, []);
 
+  const sendCustomStreamMessage = useCallback((data) => {
+    if (clientRef.current?.connectionState === 'CONNECTED') {
+      const encoder = new TextEncoder();
+      const payload = encoder.encode(JSON.stringify({ ...data, uid: String(localUidRef.current || '__local__') }));
+      clientRef.current.sendStreamMessage(payload, false).catch(err => {
+        console.error("sendCustomStreamMessage failed:", err);
+      });
+    }
+  }, []);
+
   useEffect(() => {
     loadDevices();
     return () => { if (clientRef.current?.connectionState === 'CONNECTED') leave(); };
@@ -516,6 +552,8 @@ export function useAgora() {
     switchMic, switchCamera, setSelectedOutput,
     playLocalVideo, playLocalScreen,
     getLocalVideoTrack, getLocalScreenTrack,
+    sendCustomStreamMessage,
+    ping,
     localVideoTrack:  localVideoTrackRef,
     localAudioTrack:  localAudioTrackRef,
     localScreenTrack: localScreenTrackRef,

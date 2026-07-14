@@ -1,5 +1,5 @@
 import { Mic, Monitor, Users, Video, Zap, Radio, Activity } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { animate } from 'animejs/animation';
 import { stagger, random } from 'animejs/utils';
 import { useAppStore } from '../contexts/store';
@@ -21,22 +21,102 @@ export function HomeView({ agora }) {
 
   const [hoveredPodId, setHoveredPodId] = useState(null);
   const [animatingJoinId, setAnimatingJoinId] = useState(null);
+  const [activeDragId, setActiveDragId] = useState(null);
+  
+  const [positions, setPositions] = useState({
+    general: { left: 20, top: 25 },
+    gaming: { left: 80, top: 25 },
+    'study-room': { left: 20, top: 75 },
+    'chill-beats': { left: 80, top: 75 },
+    'movie-party': { left: 50, top: 82 }
+  });
+
   const [offsets, setOffsets] = useState({
     general: { x: 0, y: 0 },
     gaming: { x: 0, y: 0 },
     'study-room': { x: 0, y: 0 },
-    'chill-beats': { x: 0, y: 0 }
+    'chill-beats': { x: 0, y: 0 },
+    'movie-party': { x: 0, y: 0 }
   });
 
+  const dragStartRef = useRef({ mouseX: 0, mouseY: 0, startLeft: 0, startTop: 0, moved: false, canvasRect: null });
+
   const getCoordinates = (channelId) => {
-    switch (channelId) {
-      case 'general':     return { left: '20%', top: '25%' };
-      case 'gaming':      return { left: '80%', top: '25%' };
-      case 'study-room':  return { left: '20%', top: '75%' };
-      case 'chill-beats': return { left: '80%', top: '75%' };
-      default:            return { left: '50%', top: '50%' };
+    if (positions[channelId]) {
+      return {
+        left: `${positions[channelId].left}%`,
+        top: `${positions[channelId].top}%`
+      };
     }
+    return { left: '50%', top: '50%' };
   };
+
+  // Drag-and-drop listener setup
+  const handleMouseDown = (e, channelId) => {
+    if (e.button !== 0) return; // only left click
+    
+    const canvas = document.querySelector('.voice-canvas');
+    if (!canvas) return;
+    
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    
+    dragStartRef.current = {
+      mouseX: e.clientX,
+      mouseY: e.clientY,
+      startLeft: positions[channelId].left,
+      startTop: positions[channelId].top,
+      moved: false,
+      canvasRect: rect
+    };
+    
+    setActiveDragId(channelId);
+  };
+
+  useEffect(() => {
+    if (!activeDragId) return;
+
+    const handleGlobalMouseMove = (e) => {
+      const start = dragStartRef.current;
+      const dx = e.clientX - start.mouseX;
+      const dy = e.clientY - start.mouseY;
+
+      if (Math.abs(dx) > 4 || Math.abs(dy) > 4) {
+        start.moved = true;
+      }
+
+      // Convert coordinate offsets to percentage values
+      const pctX = (dx / start.canvasRect.width) * 100;
+      const pctY = (dy / start.canvasRect.height) * 100;
+
+      // Bound nodes safely within the canvas grid boundaries (8% to 92%)
+      const nextLeft = Math.max(8, Math.min(92, start.startLeft + pctX));
+      const nextTop = Math.max(8, Math.min(92, start.startTop + pctY));
+
+      setPositions(prev => ({
+        ...prev,
+        [activeDragId]: { left: nextLeft, top: nextTop }
+      }));
+    };
+
+    const handleGlobalMouseUp = () => {
+      const start = dragStartRef.current;
+      setActiveDragId(null);
+
+      if (!start.moved) {
+        // Quick click triggers frequency join
+        const ch = voiceChannels.find(c => c.id === activeDragId);
+        if (ch) handleSelectChannel(ch);
+      }
+    };
+
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [activeDragId, voiceChannels]);
 
   // Mathematical dynamic organic drift loop (trigonometric sines/cosines)
   useEffect(() => {
@@ -59,6 +139,10 @@ export function HomeView({ agora }) {
         'chill-beats': {
           x: Math.sin(t * 0.45 + 3.1) * 1.5 + Math.cos(t * 0.25) * 0.3,
           y: Math.cos(t * 0.48 + 0.5) * 1.5 + Math.sin(t * 0.35) * 0.4
+        },
+        'movie-party': {
+          x: Math.sin(t * 0.4 + 4.2) * 1.5 + Math.cos(t * 0.3) * 0.4,
+          y: Math.cos(t * 0.5 + 1.8) * 1.5 + Math.sin(t * 0.2) * 0.4
         }
       });
       animFrame = requestAnimationFrame(tick);
@@ -119,7 +203,6 @@ export function HomeView({ agora }) {
     card.style.setProperty('--mouse-x', `${x}px`);
     card.style.setProperty('--mouse-y', `${y}px`);
   };
-
   const defaultCoords = getCoordinates(null);
 
   return (
@@ -133,7 +216,7 @@ export function HomeView({ agora }) {
             Powered by Agora RTC
           </div>
           <h1 className="hero-title">
-            TALK LOUD,<br />STUDY TOGETHER
+            Work Hard,<br />Chill Together
           </h1>
           <p className="hero-sub">
             Voice & video calling for your squad. No bloat, just vibes.
@@ -272,7 +355,7 @@ export function HomeView({ agora }) {
                 onMouseEnter={() => setHoveredPodId(ch.id)}
                 onMouseLeave={() => setHoveredPodId(null)}
                 onMouseMove={handleMouseMove}
-                onClick={() => handleSelectChannel(ch)}
+                onMouseDown={(e) => handleMouseDown(e, ch.id)}
               >
                 <div className="kokonut-card-glow-overlay" />
                 <div className="pod-content">                  <div className="pod-header">
