@@ -184,6 +184,8 @@ export function useAgora() {
           window.dispatchEvent(new CustomEvent('crossword-sync-evt', { detail: msg }));
         } else if (msg.type === 'pomodoro-sync') {
           window.dispatchEvent(new CustomEvent('pomodoro-sync-evt', { detail: msg }));
+        } else if (msg.type === 'youtube-sync') {
+          window.dispatchEvent(new CustomEvent('youtube-sync-evt', { detail: msg }));
         } else if (msg.text !== undefined) {
           const speakerUid = String(msg.uid);
           setSubtitles(prev => ({ ...prev, [speakerUid]: msg.text }));

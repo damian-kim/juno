@@ -3,7 +3,7 @@ import { createRoot } from 'react-dom/client';
 import {
   Mic, MicOff, Video, VideoOff, Monitor, MonitorOff,
   PhoneOff, Settings, Maximize, Minimize, Grid2X2,
-  Focus, ExternalLink, Gamepad2, Play, Volume2, VolumeX,
+  Focus, ExternalLink, Gamepad2, Play, Pause, Volume2, VolumeX,
   Shuffle, SkipBack, SkipForward, Repeat, Trash2, Plus, ListMusic, Volume1
 } from 'lucide-react';
 import { useAppStore } from '../contexts/store';
@@ -150,8 +150,8 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
 
   return (
     <div
-      className={`video-tile relative ${isFocused ? 'focused' : ''} ${isStrip ? 'strip-tile' : ''} ${isRemoteScreenShare ? 'is-screen-share' : ''}`}
-      style={tileStyle}
+      className={`video-tile-inner relative ${isFocused ? 'focused' : ''} ${isStrip ? 'strip-tile-inner' : ''} ${isRemoteScreenShare ? 'is-screen-share-inner' : ''}`}
+      style={{ width: '100%', height: '100%', borderRadius: 'inherit', overflow: 'hidden' }}
       onDoubleClick={onDoubleClick}
     >
       <video
@@ -211,13 +211,6 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
         </div>
       </div>
 
-      {!isStrip && (
-        <div className="tile-resize-handle" onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); onResizeStart(uid, e.clientX, flexGrow); }} title="Drag to resize">
-          <svg width="12" height="12" viewBox="0 0 10 10" fill="none">
-            <path d="M9 1L1 9M9 5L5 9M9 9L9 9" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-        </div>
-      )}
     </div>
   );
 }
@@ -258,21 +251,26 @@ function ScreenTile({ getLocalScreenTrack }) {
     const videoEl = videoRef.current;
 
     const tryBind = () => {
-      if (!isMounted || !videoEl) return;
-      const agoraTrack = typeof getLocalScreenTrack === 'function' ? getLocalScreenTrack() : null;
-      if (!agoraTrack) {
-        if (attempts++ < 40) timeoutId = setTimeout(tryBind, 100);
-        return;
+      try {
+        if (!isMounted || !videoEl) return;
+        const agoraTrack = typeof getLocalScreenTrack === 'function' ? getLocalScreenTrack() : null;
+        if (!agoraTrack) {
+          if (attempts++ < 40) timeoutId = setTimeout(tryBind, 100);
+          return;
+        }
+        const rawTrack = agoraTrack.getMediaStreamTrack?.();
+        if (!rawTrack) {
+          if (attempts++ < 40) timeoutId = setTimeout(tryBind, 100);
+          return;
+        }
+        videoEl.srcObject = new MediaStream([rawTrack]);
+        videoEl.play()
+          .then(() => { if (isMounted) setStatus('playing'); })
+          .catch(e => { console.warn('Screen video play blocked:', e); if (isMounted) setStatus('error'); });
+      } catch (err) {
+        console.error("Error in ScreenTile tryBind:", err);
+        if (isMounted) setStatus('error');
       }
-      const rawTrack = agoraTrack.getMediaStreamTrack?.();
-      if (!rawTrack) {
-        if (attempts++ < 40) timeoutId = setTimeout(tryBind, 100);
-        return;
-      }
-      videoEl.srcObject = new MediaStream([rawTrack]);
-      videoEl.play()
-        .then(() => { if (isMounted) setStatus('playing'); })
-        .catch(e => { console.warn('Screen video play blocked:', e); if (isMounted) setStatus('error'); });
     };
 
     tryBind();
@@ -315,7 +313,7 @@ function GridSizePicker({ value, onChange }) {
           onClick={() => onChange(opt.val)}
           title={`Grid: ${opt.label}`}
         >
-          {opt.icon ? <opt.icon size={14} /> : opt.label}
+          {opt.icon ? <opt.icon size={18} /> : opt.label}
         </button>
       ))}
     </div>
@@ -507,32 +505,58 @@ export function CallView({ agora }) {
   const [controlBarHeight, setControlBarHeight] = useState(76);
   const [studyDockPos, setStudyDockPos] = useState({ x: 80, y: 150 });
   const [studyDockSize, setStudyDockSize] = useState({ w: 200, h: 320 });
-  const [pomoDockPos, setPomoDockPos] = useState({ x: 520, y: 150 });
+  const [pomoDockPos, setPomoDockPos] = useState({ x: 1100, y: 30 });
   const [pomoDockSize, setPomoDockSize] = useState({ w: 220, h: 220 });
-  const [youtubeDockPos, setYoutubeDockPos] = useState({ x: 260, y: 150 });
+  const [youtubeDockPos, setYoutubeDockPos] = useState({ x: 480, y: 150 });
   const [youtubeDockSize, setYoutubeDockSize] = useState({ w: 290, h: 320 });
   const [customAlarmMin, setCustomAlarmMin] = useState('5');
-  const [youtubeQueue, setYoutubeQueue] = useState([
-    { id: '2dH7lNcA3MA', title: 'Studio Ghibli Piano ( Hayao Miyazaki )', url: 'https://www.youtube.com/watch?v=2dH7lNcA3MA' },
-    { id: 'yv2-8z_p5kw', title: 'Deep Within The Forest ( Rain Lofi )', url: 'https://www.youtube.com/watch?v=yv2-8z_p5kw' },
-    { id: '5qap5aO4i9A', title: 'Coffee Shop Cozy Lofi Ambient', url: 'https://www.youtube.com/watch?v=5qap5aO4i9A' }
-  ]);
-  const [currentQueueIdx, setCurrentQueueIdx] = useState(0);
+  const [youtubeVolume, setYoutubeVolume] = useState(50);
+  const preMuteVolumeRef = useRef(50);
+  const [youtubeQueue, setYoutubeQueue] = useState([]);
+  const [currentQueueIdx, setCurrentQueueIdx] = useState(-1);
   const [repeatMode, setRepeatMode] = useState('queue'); // 'off' | 'track' | 'queue'
   const [isShuffleActive, setIsShuffleActive] = useState(false);
   const [addSongUrl, setAddSongUrl] = useState('');
-  const [youtubeUrl, setYoutubeUrl] = useState('https://www.youtube.com/watch?v=2dH7lNcA3MA');
+  const [youtubeUrl, setYoutubeUrl] = useState('');
   const [youtubePlaying, setYoutubePlaying] = useState(false);
   const [selectedGame, setSelectedGame] = useState(null);
+  const [lofiGridPos, setLofiGridPos] = useState({ x: 80, y: 150 });
+  const [lofiGridSize, setLofiGridSize] = useState({ w: 200, h: 320 });
+
+  useEffect(() => {
+    const screenW = window.innerWidth;
+    setPomoDockPos({ x: screenW - 220 - 40, y: 30 });
+    setYoutubeDockPos({ x: Math.floor((screenW - 290) / 2), y: 150 });
+    setLofiGridPos({ x: 80, y: 150 });
+  }, []);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        if (agora.screenShareEnabled) {
+          console.log("Juno tab became visible; stopping screen share to prevent feedback loop/crash.");
+          agora.stopScreenShare();
+          addNotification('Screen share stopped automatically upon returning to Juno');
+        }
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [agora.screenShareEnabled, agora.stopScreenShare, addNotification]);
 
   useEffect(() => {
     const track = youtubeQueue[currentQueueIdx];
     if (track) {
       setYoutubeUrl(track.url);
+    } else {
+      setYoutubeUrl('');
     }
   }, [currentQueueIdx, youtubeQueue]);
 
   const resizingRef = useRef(null); // { uid, startX, startSize }
+  const ytPlayerRef = useRef(null);
   const callViewRef = useRef(null);
   const popoutRef = useRef(null);
   const popoutRootRef = useRef(null);
@@ -780,6 +804,68 @@ export function CallView({ agora }) {
   }, []);
 
   useEffect(() => {
+    const handleSync = (e) => {
+      const { action, index, playing, track, indexToRemove, shuffle, repeat } = e.detail;
+      if (action === 'play') {
+        setYoutubePlaying(true);
+      } else if (action === 'pause') {
+        setYoutubePlaying(false);
+      } else if (action === 'change-track') {
+        setCurrentQueueIdx(index);
+        if (playing) setYoutubePlaying(true);
+      } else if (action === 'add-track') {
+        setYoutubeQueue(prev => {
+          const exists = prev.some(t => t.id === track.id);
+          if (exists) return prev;
+          const next = [...prev, track];
+          if (prev.length === 0) {
+            setCurrentQueueIdx(0);
+          }
+          return next;
+        });
+      } else if (action === 'remove-track') {
+        setYoutubeQueue(prev => {
+          const nextQueue = prev.filter((_, idx) => idx !== indexToRemove);
+          setCurrentQueueIdx(curr => {
+            if (nextQueue.length === 0) {
+              setYoutubePlaying(false);
+              return -1;
+            }
+            if (curr === indexToRemove) {
+              return 0;
+            } else if (curr > indexToRemove) {
+              return curr - 1;
+            }
+            return curr;
+          });
+          return nextQueue;
+        });
+      } else if (action === 'toggle-shuffle') {
+        setIsShuffleActive(shuffle);
+      } else if (action === 'change-repeat') {
+        setRepeatMode(repeat);
+      }
+    };
+    window.addEventListener('youtube-sync-evt', handleSync);
+    return () => window.removeEventListener('youtube-sync-evt', handleSync);
+  }, []);
+
+  useEffect(() => {
+    const player = ytPlayerRef.current;
+    if (player) {
+      try {
+        if (youtubePlaying) {
+          if (typeof player.playVideo === 'function') player.playVideo();
+        } else {
+          if (typeof player.pauseVideo === 'function') player.pauseVideo();
+        }
+      } catch (e) {
+        console.warn("Error playing/pausing YouTube player via effect:", e);
+      }
+    }
+  }, [youtubePlaying]);
+
+  useEffect(() => {
     if (!pomoActive) return;
     const timer = setInterval(() => {
       setPomoTimeLeft(prev => {
@@ -1010,6 +1096,57 @@ export function CallView({ agora }) {
     window.addEventListener('mouseup', handleMouseUp);
   };
 
+  const handleLofiGridMoveMouseDown = (e) => {
+    if (e.target.closest('button') || e.target.closest('input') || e.target.closest('.video-tile') || e.target.closest('select')) return;
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const initialX = lofiGridPos.x;
+    const initialY = lofiGridPos.y;
+    
+    const handleMouseMove = (moveEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+      setLofiGridPos({
+        x: initialX + dx,
+        y: initialY + dy
+      });
+    };
+    
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
+  const handleLofiGridResizeMouseDown = (e) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const initialW = lofiGridSize.w;
+    const initialH = lofiGridSize.h;
+    
+    const handleMouseMove = (moveEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+      setLofiGridSize({
+        w: Math.max(160, Math.min(1000, initialW + dx)),
+        h: Math.max(120, Math.min(800, initialH + dy))
+      });
+    };
+    
+    const handleMouseUp = () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+  };
+
   // Load YouTube Player API if not already present
   useEffect(() => {
     if (!window.YT) {
@@ -1028,6 +1165,10 @@ export function CallView({ agora }) {
   const initYoutubePlayer = () => {
     const id = getYoutubeId(youtubeUrl);
     if (!id) return;
+
+    if (!document.getElementById('youtube-player-element')) {
+      return;
+    }
     
     if (window.YT && window.YT.Player) {
       if (ytPlayerRef.current) {
@@ -1058,6 +1199,7 @@ export function CallView({ agora }) {
           },
           events: {
             onReady: (event) => {
+              try { event.target.setVolume(youtubeVolume); } catch {}
               if (youtubePlaying) {
                 event.target.playVideo();
               } else {
@@ -1118,22 +1260,36 @@ export function CallView({ agora }) {
     };
   }, [youtubeUrl]);
 
-  const handleYoutubePlay = () => {
-    const player = ytPlayerRef.current;
-    if (player && typeof player.playVideo === 'function') {
-      try { player.playVideo(); } catch {}
+  const handleVolumeChange = (newVolume) => {
+    setYoutubeVolume(newVolume);
+    if (newVolume > 0) {
+      preMuteVolumeRef.current = newVolume;
     }
+    const player = ytPlayerRef.current;
+    if (player && typeof player.setVolume === 'function') {
+      try { player.setVolume(newVolume); } catch {}
+    }
+  };
+
+  const broadcastYoutubeSync = (payload) => {
+    if (typeof agora.sendCustomStreamMessage === 'function') {
+      agora.sendCustomStreamMessage({
+        type: 'youtube-sync',
+        ...payload
+      });
+    }
+  };
+
+  const handleYoutubePlay = () => {
     setYoutubePlaying(true);
     addNotification('Lofi stream playing');
+    broadcastYoutubeSync({ action: 'play' });
   };
 
   const handleYoutubePause = () => {
-    const player = ytPlayerRef.current;
-    if (player && typeof player.pauseVideo === 'function') {
-      try { player.pauseVideo(); } catch {}
-    }
     setYoutubePlaying(false);
     addNotification('Lofi stream paused');
+    broadcastYoutubeSync({ action: 'pause' });
   };
 
   const handleYoutubeSeek = (seconds) => {
@@ -1157,26 +1313,33 @@ export function CallView({ agora }) {
       }
       return;
     }
+    let nextIdx = currentQueueIdx;
     if (isShuffleActive) {
-      const randomIdx = Math.floor(Math.random() * youtubeQueue.length);
-      setCurrentQueueIdx(randomIdx);
-      addNotification('Skipped to random track');
-      return;
-    }
-    if (currentQueueIdx < youtubeQueue.length - 1) {
-      setCurrentQueueIdx(prev => prev + 1);
+      nextIdx = Math.floor(Math.random() * youtubeQueue.length);
+    } else if (currentQueueIdx < youtubeQueue.length - 1) {
+      nextIdx = currentQueueIdx + 1;
     } else if (repeatMode === 'queue') {
-      setCurrentQueueIdx(0);
-      addNotification('Looping queue start');
+      nextIdx = 0;
+    }
+    if (nextIdx !== currentQueueIdx) {
+      setCurrentQueueIdx(nextIdx);
+      setYoutubePlaying(true);
+      broadcastYoutubeSync({ action: 'change-track', index: nextIdx, playing: true });
     }
   };
 
   const handleYoutubePrev = () => {
     if (youtubeQueue.length === 0) return;
+    let nextIdx = currentQueueIdx;
     if (currentQueueIdx > 0) {
-      setCurrentQueueIdx(prev => prev - 1);
+      nextIdx = currentQueueIdx - 1;
     } else if (repeatMode === 'queue') {
-      setCurrentQueueIdx(youtubeQueue.length - 1);
+      nextIdx = youtubeQueue.length - 1;
+    }
+    if (nextIdx !== currentQueueIdx) {
+      setCurrentQueueIdx(nextIdx);
+      setYoutubePlaying(true);
+      broadcastYoutubeSync({ action: 'change-track', index: nextIdx, playing: true });
     }
   };
 
@@ -1191,23 +1354,37 @@ export function CallView({ agora }) {
       title: `Lofi Track #${youtubeQueue.length + 1} (${id})`,
       url: addSongUrl
     };
-    setYoutubeQueue(prev => [...prev, newTrack]);
+    setYoutubeQueue(prev => {
+      const next = [...prev, newTrack];
+      return next;
+    });
+    if (youtubeQueue.length === 0) {
+      setCurrentQueueIdx(0);
+    }
     setAddSongUrl('');
     addNotification('Appended song to playlist queue');
+    broadcastYoutubeSync({ action: 'add-track', track: newTrack });
   };
 
   const handleYoutubeRemoveTrack = (indexToRemove) => {
-    if (youtubeQueue.length <= 1) {
-      addNotification('Cannot clear the last remaining track');
-      return;
+    const nextQueue = youtubeQueue.filter((_, idx) => idx !== indexToRemove);
+    setYoutubeQueue(nextQueue);
+    let nextIdx = currentQueueIdx;
+    let nextPlaying = youtubePlaying;
+    if (nextQueue.length === 0) {
+      nextIdx = -1;
+      nextPlaying = false;
+    } else {
+      if (currentQueueIdx === indexToRemove) {
+        nextIdx = 0;
+      } else if (currentQueueIdx > indexToRemove) {
+        nextIdx = currentQueueIdx - 1;
+      }
     }
-    setYoutubeQueue(prev => prev.filter((_, idx) => idx !== indexToRemove));
-    if (currentQueueIdx === indexToRemove) {
-      setCurrentQueueIdx(0);
-    } else if (currentQueueIdx > indexToRemove) {
-      setCurrentQueueIdx(prev => prev - 1);
-    }
+    setCurrentQueueIdx(nextIdx);
+    setYoutubePlaying(nextPlaying);
     addNotification('Removed track');
+    broadcastYoutubeSync({ action: 'remove-track', indexToRemove });
   };
 
   // Reset selected game & close active states when switching channels
@@ -1575,7 +1752,7 @@ export function CallView({ agora }) {
       )}
 
       {/* Lofi Room Synced Pomodoro Timer Capsule */}
-      {currentChannel === 'chill-beats' && (
+      {(currentChannel === 'chill-beats' || currentChannel === 'study-room') && (
         <>
       {/* Draggable & Resizable Pomodoro / Custom Alarm Timer Pod */}
       {(currentChannel === 'study-room' || currentChannel === 'chill-beats') && (
@@ -1600,17 +1777,20 @@ export function CallView({ agora }) {
 
           <div className="pod-timer-content flex-1 overflow-y-auto px-2 pb-2 text-[10px] flex flex-col gap-2">
             {/* Custom alarm section */}
-            <div className="custom-alarm-section flex flex-col gap-1 bg-black/15 p-1.5 rounded border border-white/5">
-              <span className="font-bold text-zinc-400">CUSTOM ALARM TIME</span>
-              <div className="flex gap-1 items-center">
+            <div className="custom-alarm-section flex flex-col gap-1 bg-black/20 p-2 rounded-lg border border-white/5">
+              <span className="font-bold text-zinc-400 tracking-wider" style={{ fontSize: '8px' }}>CUSTOM ALARM TIME</span>
+              <div className="flex gap-1.5 items-center">
                 <input 
-                  type="number" 
-                  min="1" 
-                  max="300"
+                  type="text"
+                  inputMode="numeric"
+                  pattern="[0-9]*"
                   value={customAlarmMin} 
-                  onChange={(e) => setCustomAlarmMin(e.target.value)} 
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, '');
+                    setCustomAlarmMin(val);
+                  }} 
                   placeholder="Mins"
-                  className="w-16 px-1.5 py-0.5 bg-zinc-800 text-white rounded outline-none border border-white/5"
+                  className="w-14 px-2 py-1 bg-black/40 text-white rounded-md outline-none border border-white/10 focus:border-purple-500/50 text-center transition-all"
                   style={{ fontSize: '9px' }}
                 />
                 <button 
@@ -1621,7 +1801,7 @@ export function CallView({ agora }) {
                       addNotification(`Custom alarm set for ${m} mins`);
                     }
                   }} 
-                  className="flex-1 py-0.5 rounded bg-purple-600 hover:bg-purple-500 font-bold transition text-white"
+                  className="flex-1 py-1 rounded-md bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 font-bold transition-all text-white shadow-md shadow-purple-900/25 active:scale-95"
                   style={{ fontSize: '9px' }}
                 >
                   Set Alarm
@@ -1630,23 +1810,23 @@ export function CallView({ agora }) {
             </div>
 
             {/* Pomodoro standard presets */}
-            <div className="presets-section flex flex-col gap-1 bg-black/10 p-1 rounded border border-white/5">
-              <span className="font-bold text-zinc-400" style={{ fontSize: '8px' }}>POMODORO PRESETS</span>
-              <div className="flex gap-1 justify-between">
-                <button onClick={() => { startPomodoro(25); addNotification('Pomodoro set: 25 mins'); }} className="preset-btn flex-1 py-0.5 bg-zinc-800 text-zinc-300 rounded font-semibold text-[9px] hover:text-white transition">25m</button>
-                <button onClick={() => { startPomodoro(30); addNotification('Pomodoro set: 30 mins'); }} className="preset-btn flex-1 py-0.5 bg-zinc-800 text-zinc-300 rounded font-semibold text-[9px] hover:text-white transition">30m</button>
-                <button onClick={() => { startPomodoro(45); addNotification('Pomodoro set: 45 mins'); }} className="preset-btn flex-1 py-0.5 bg-zinc-800 text-zinc-300 rounded font-semibold text-[9px] hover:text-white transition">45m</button>
+            <div className="presets-section flex flex-col gap-1 bg-black/15 p-2 rounded-lg border border-white/5">
+              <span className="font-bold text-zinc-400 tracking-wider" style={{ fontSize: '8px' }}>POMODORO PRESETS</span>
+              <div className="flex gap-1.5 justify-between">
+                <button onClick={() => { startPomodoro(25); addNotification('Pomodoro set: 25 mins'); }} className="preset-btn flex-1 py-1 bg-white/5 hover:bg-white/10 active:scale-95 text-zinc-200 border border-white/10 hover:border-white/20 rounded-md font-semibold text-[9px] transition-all">25m</button>
+                <button onClick={() => { startPomodoro(30); addNotification('Pomodoro set: 30 mins'); }} className="preset-btn flex-1 py-1 bg-white/5 hover:bg-white/10 active:scale-95 text-zinc-200 border border-white/10 hover:border-white/20 rounded-md font-semibold text-[9px] transition-all">30m</button>
+                <button onClick={() => { startPomodoro(45); addNotification('Pomodoro set: 45 mins'); }} className="preset-btn flex-1 py-1 bg-white/5 hover:bg-white/10 active:scale-95 text-zinc-200 border border-white/10 hover:border-white/20 rounded-md font-semibold text-[9px] transition-all">45m</button>
               </div>
             </div>
 
             {/* Control buttons */}
-            <div className="flex gap-1 justify-center mt-auto">
+            <div className="flex gap-1.5 justify-center mt-auto pt-1">
               {pomoActive ? (
-                <button onClick={pausePomodoro} className="pomo-ctrl-btn pause flex-1 py-1 rounded font-bold text-white bg-amber-600 hover:bg-amber-500 transition text-[9px]">PAUSE</button>
+                <button onClick={pausePomodoro} className="pomo-ctrl-btn pause flex-1 py-1.5 rounded-md font-bold text-white bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 transition-all text-[9px] shadow-md shadow-amber-950/20 active:scale-95">PAUSE</button>
               ) : (
-                <button onClick={() => startPomodoro(pomoDuration)} className="pomo-ctrl-btn start flex-1 py-1 rounded font-bold text-white bg-emerald-600 hover:bg-emerald-500 transition text-[9px]">START</button>
+                <button onClick={() => startPomodoro(pomoDuration)} className="pomo-ctrl-btn start flex-1 py-1.5 rounded-md font-bold text-white bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 transition-all text-[9px] shadow-md shadow-emerald-950/20 active:scale-95">START</button>
               )}
-              <button onClick={resetPomodoro} className="pomo-ctrl-btn reset flex-1 py-1 rounded font-bold text-white bg-zinc-700 hover:bg-zinc-600 transition text-[9px]">RESET</button>
+              <button onClick={resetPomodoro} className="pomo-ctrl-btn reset flex-1 py-1.5 rounded-md font-bold text-white bg-white/10 hover:bg-white/20 border border-white/10 hover:border-white/20 transition-all text-[9px] active:scale-95">RESET</button>
             </div>
           </div>
 
@@ -1669,7 +1849,7 @@ export function CallView({ agora }) {
       )}
 
           <div 
-            className="lofi-youtube-ambient-control study-pomo-alarm-pod flex flex-col"
+            className="lofi-album-playlist-deck study-pomo-alarm-pod flex flex-col"
             style={{
               left: `${youtubeDockPos.x}px`,
               top: `${youtubeDockPos.y}px`,
@@ -1679,114 +1859,148 @@ export function CallView({ agora }) {
               zIndex: 100
             }}
           >
-            <div className="pod-header" onMouseDown={handleYoutubeDockMoveMouseDown} style={{ cursor: 'move', userSelect: 'none' }}>
-              <span className="pod-title flex items-center gap-1.5"><ListMusic size={14} /> LOFI STREAM PLAYLIST</span>
+            <div className="album-deck-header" onMouseDown={handleYoutubeDockMoveMouseDown} style={{ cursor: 'move', userSelect: 'none' }}>
+              <span className="album-deck-title flex items-center gap-1.5"><ListMusic size={16} /> Playlist</span>
               <div className={`live-dot ${youtubePlaying ? 'active' : ''}`} />
             </div>
 
-            <div className="pod-timer-content flex-1 overflow-y-auto px-3 pb-3 text-[10px] flex flex-col gap-3.5 pt-3 font-sans">
-              {/* Now Playing Header Card */}
-              <div className="bg-black/20 p-3 rounded-xl border border-white/5 flex flex-col gap-2 shadow-inner">
-                <span className="font-bold text-[8px] text-zinc-400 tracking-widest">NOW PLAYING</span>
-                <span className="font-extrabold text-[11px] text-white truncate flex items-center gap-1" title={youtubeQueue[currentQueueIdx]?.title}>
-                  💿 {youtubeQueue[currentQueueIdx]?.title || 'No track playing'}
-                </span>
-                
-                {/* Spotify-like playback controls deck */}
-                <div className="flex gap-2 justify-center items-center mt-2">
-                  {/* Shuffle */}
-                  <button 
-                    onClick={() => setIsShuffleActive(!isShuffleActive)} 
-                    className={`playlist-ctrl-btn ${isShuffleActive ? 'active' : ''}`}
-                    title="Shuffle (Random selection)"
-                  >
-                    <Shuffle size={12} />
-                  </button>
-
-                  {/* Previous */}
-                  <button 
-                    onClick={handleYoutubePrev} 
-                    className="playlist-ctrl-btn"
-                    title="Previous Track"
-                  >
-                    <SkipBack size={12} />
-                  </button>
-
-                  {/* Seek Back 10s */}
-                  <button 
-                    onClick={() => handleYoutubeSeek(-10)} 
-                    className="playlist-ctrl-btn text-[8px] font-bold"
-                    title="Skip Back 10s"
-                  >
-                    -10s
-                  </button>
-
-                  {/* Play/Pause */}
-                  <button 
-                    onClick={youtubePlaying ? handleYoutubePause : handleYoutubePlay} 
-                    className="playlist-ctrl-btn play-pause-btn"
-                    title={youtubePlaying ? 'Pause' : 'Play'}
-                  >
-                    {youtubePlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
-                  </button>
-
-                  {/* Seek Forward 10s */}
-                  <button 
-                    onClick={() => handleYoutubeSeek(10)} 
-                    className="playlist-ctrl-btn text-[8px] font-bold"
-                    title="Skip Forward 10s"
-                  >
-                    +10s
-                  </button>
-
-                  {/* Next */}
-                  <button 
-                    onClick={handleYoutubeNext} 
-                    className="playlist-ctrl-btn"
-                    title="Next Track"
-                  >
-                    <SkipForward size={12} />
-                  </button>
-
-                  {/* Repeat Cycle */}
-                  <button 
-                    onClick={() => {
-                      if (repeatMode === 'off') setRepeatMode('queue');
-                      else if (repeatMode === 'queue') setRepeatMode('track');
-                      else setRepeatMode('off');
-                    }} 
-                    className={`playlist-ctrl-btn ${repeatMode !== 'off' ? 'active' : ''}`}
-                    title={`Repeat Mode: ${repeatMode}`}
-                  >
-                    <Repeat size={12} />
-                    {repeatMode === 'track' && <span className="absolute text-[6px] font-black top-[-2px] right-[-2px] bg-red-500 rounded-full px-0.5 text-white">1</span>}
-                  </button>
+            <div className="album-deck-content flex-1 overflow-y-auto px-4 pb-4 text-[10px] flex flex-col gap-4 pt-4">
+              
+              {/* Spinning vinyl disk album cover block */}
+              <div className="album-cover-card flex items-center gap-3.5 bg-black/30 p-3 rounded-xl border border-white/5 shadow-lg">
+                <div className="vinyl-record-container relative flex-shrink-0 w-12 h-12">
+                  <div className={`vinyl-disk ${youtubePlaying ? 'spinning' : ''}`} />
+                  <div className="vinyl-center" />
                 </div>
+                <div className="flex-1 min-w-0 flex flex-col gap-0.5">
+                  <span className="font-extrabold text-[11px] text-white truncate" title={youtubeQueue[currentQueueIdx]?.title}>
+                    {youtubeQueue[currentQueueIdx]?.title || 'No track playing'}
+                  </span>
+                  <span className="text-[8px] text-zinc-400 uppercase tracking-wider font-semibold">Active Track</span>
+                </div>
+              </div>
+
+              {/* Centered, auto-scaling buttons row */}
+              <div className="flex gap-1 justify-between items-center w-full bg-black/15 p-2 rounded-xl border border-white/5">
+                {/* Shuffle */}
+                <button 
+                  onClick={() => {
+                    const nextShuffle = !isShuffleActive;
+                    setIsShuffleActive(nextShuffle);
+                    broadcastYoutubeSync({ action: 'toggle-shuffle', shuffle: nextShuffle });
+                  }} 
+                  className={`playlist-ctrl-btn flex-1 ${isShuffleActive ? 'active' : ''}`}
+                  title="Shuffle"
+                >
+                  <Shuffle size={12} />
+                </button>
+
+                {/* Previous */}
+                <button 
+                  onClick={handleYoutubePrev} 
+                  className="playlist-ctrl-btn flex-1"
+                  title="Prev"
+                >
+                  <SkipBack size={12} />
+                </button>
+
+                {/* Seek Back 10s */}
+                <button 
+                  onClick={() => handleYoutubeSeek(-10)} 
+                  className="playlist-ctrl-btn flex-1 text-[8px] font-black"
+                  title="Back 10s"
+                >
+                  -10s
+                </button>
+
+                {/* Play/Pause */}
+                <button 
+                  onClick={youtubePlaying ? handleYoutubePause : handleYoutubePlay} 
+                  className="playlist-ctrl-btn play-pause-btn flex-shrink-0"
+                  title={youtubePlaying ? 'Pause' : 'Play'}
+                >
+                  {youtubePlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" />}
+                </button>
+
+                {/* Seek Forward 10s */}
+                <button 
+                  onClick={() => handleYoutubeSeek(10)} 
+                  className="playlist-ctrl-btn flex-1 text-[8px] font-black"
+                  title="Forward 10s"
+                >
+                  +10s
+                </button>
+
+                {/* Next */}
+                <button 
+                  onClick={handleYoutubeNext} 
+                  className="playlist-ctrl-btn flex-1"
+                  title="Next"
+                >
+                  <SkipForward size={12} />
+                </button>
+
+                {/* Repeat */}
+                <button 
+                  onClick={() => {
+                    let nextRepeat;
+                    if (repeatMode === 'off') nextRepeat = 'queue';
+                    else if (repeatMode === 'queue') nextRepeat = 'track';
+                    else nextRepeat = 'off';
+                    setRepeatMode(nextRepeat);
+                    broadcastYoutubeSync({ action: 'change-repeat', repeat: nextRepeat });
+                  }} 
+                  className={`playlist-ctrl-btn flex-1 ${repeatMode !== 'off' ? 'active' : ''}`}
+                  title={`Repeat: ${repeatMode}`}
+                >
+                  <Repeat size={12} />
+                  {repeatMode === 'track' && <span className="absolute text-[6px] font-black top-[-2px] right-[-2px] bg-red-500 rounded-full px-0.5 text-white">1</span>}
+                </button>
+              </div>
+
+              {/* Volume Slider block */}
+              <div className="flex items-center gap-2 px-2.5 py-1.5 bg-black/20 rounded-lg border border-white/5">
+                <button 
+                  onClick={() => handleVolumeChange(youtubeVolume > 0 ? 0 : preMuteVolumeRef.current)} 
+                  className="text-zinc-400 hover:text-white transition-colors flex items-center"
+                  title="Mute/Unmute"
+                >
+                  {youtubeVolume === 0 ? <VolumeX size={13} className="text-zinc-500" /> : youtubeVolume < 40 ? <Volume1 size={13} /> : <Volume2 size={13} />}
+                </button>
+                <input 
+                  type="range" 
+                  min="0" 
+                  max="100" 
+                  value={youtubeVolume}
+                  onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
+                  className="flex-1 h-1 bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-purple-500 hover:accent-purple-400 transition-all"
+                  style={{
+                    background: `linear-gradient(to right, #7c6dfa 0%, #7c6dfa ${youtubeVolume}%, #27272a ${youtubeVolume}%, #27272a 100%)`
+                  }}
+                />
+                <span className="text-[8px] text-zinc-400 font-mono w-6 text-right select-none">{youtubeVolume}%</span>
               </div>
 
               {/* Paste & Add YouTube Link wrapper */}
-              <div className="flex flex-col gap-1.5">
-                <span className="font-bold text-zinc-400 tracking-wider text-[8px]">ADD TO PLAYLIST QUEUE</span>
-                <div className="playlist-input-wrapper flex items-center bg-zinc-900/60 border border-white/10 rounded-lg p-1">
-                  <input 
-                    type="text" 
-                    value={addSongUrl} 
-                    onChange={(e) => setAddSongUrl(e.target.value)} 
-                    placeholder="Paste YouTube music link..."
-                    className="flex-1 bg-transparent text-white text-[10px] outline-none px-2 py-1 placeholder-zinc-500 font-sans"
-                  />
-                  <button 
-                    onClick={handleYoutubeAddTrack} 
-                    className="px-3 py-1 bg-purple-600 hover:bg-purple-500 transition text-white font-bold rounded-md text-[10px] flex items-center gap-1"
-                  >
-                    <Plus size={12} /> Add
-                  </button>
-                </div>
+              <div className="playlist-input-wrapper flex items-center bg-zinc-900/60 border border-white/10 rounded-lg p-1">
+                <input 
+                  type="text" 
+                  value={addSongUrl} 
+                  onChange={(e) => setAddSongUrl(e.target.value)} 
+                  placeholder="Paste YouTube link..."
+                  className="flex-1 bg-transparent text-white text-[10px] outline-none px-2 py-1 placeholder-zinc-500"
+                />
+                <button 
+                  onClick={handleYoutubeAddTrack} 
+                  className="px-3 py-1 bg-purple-600 hover:bg-purple-500 transition text-white font-bold rounded-md text-[10px] flex items-center gap-1"
+                >
+                  <Plus size={12} /> Add
+                </button>
               </div>
 
-              {/* Scrollable Track Queue */}
+              {/* Scrollable Track Queue list */}
               <div className="flex flex-col gap-1.5 max-h-[160px] overflow-y-auto pr-1">
-                <span className="font-bold text-zinc-400 tracking-wider text-[8px]">PLAYLIST QUEUE ({youtubeQueue.length} SONGS)</span>
+                <span className="font-bold text-zinc-400 tracking-wider text-[8px]">Queue ({youtubeQueue.length})</span>
                 <div className="flex flex-col gap-1.5">
                   {youtubeQueue.map((track, idx) => (
                     <div 
@@ -1795,10 +2009,11 @@ export function CallView({ agora }) {
                       onClick={() => {
                         setCurrentQueueIdx(idx);
                         if (!youtubePlaying) handleYoutubePlay();
+                        broadcastYoutubeSync({ action: 'change-track', index: idx, playing: true });
                       }}
                       style={{ minHeight: '34px' }}
                     >
-                      <span className="truncate flex-1 pr-2 text-[10px] font-sans flex items-center gap-1.5">
+                      <span className="truncate flex-1 pr-2 text-[10px] flex items-center gap-1.5">
                         {currentQueueIdx === idx ? '🎶' : <ListMusic size={11} className="text-zinc-500" />}
                         {track.title}
                       </span>
@@ -1808,7 +2023,7 @@ export function CallView({ agora }) {
                           handleYoutubeRemoveTrack(idx);
                         }}
                         className="text-zinc-500 hover:text-rose-400 p-1 transition-colors"
-                        title="Remove Track"
+                        title="Remove"
                       >
                         <Trash2 size={12} />
                       </button>
@@ -1816,6 +2031,7 @@ export function CallView({ agora }) {
                   ))}
                 </div>
               </div>
+
             </div>
 
             {/* Hidden div target for YouTube API to bind to */}
@@ -1839,80 +2055,7 @@ export function CallView({ agora }) {
         </>
       )}
 
-      {/* Forest Study Room: Draggable & Resizable Tree Pod */}
-      {currentChannel === 'study-room' && (
-        <div 
-          className="study-tree-pod flex flex-col" 
-          style={{
-            left: `${studyDockPos.x}px`,
-            top: `${studyDockPos.y}px`,
-            width: `${studyDockSize.w}px`,
-            height: `${studyDockSize.h}px`,
-            position: 'absolute'
-          }}
-        >
-          <div className="pod-header" onMouseDown={handleStudyDockMoveMouseDown} style={{ cursor: 'move', userSelect: 'none' }}>
-            <span className="pod-title">STUDY DOCK</span>
-            <div className="live-dot" />
-          </div>
-
-          <div className="p-2 border-b border-white/5 bg-black/25 text-[10px]">
-            <input 
-              type="text" 
-              value={youtubeUrl} 
-              onChange={(e) => setYoutubeUrl(e.target.value)} 
-              placeholder="Paste YouTube Link"
-              className="w-full px-2 py-0.5 bg-zinc-800 text-white rounded outline-none border border-white/5"
-              style={{ fontSize: '9px' }}
-            />
-            <button 
-              onClick={() => setYoutubePlaying(!youtubePlaying)} 
-              className={`w-full mt-1.5 py-0.5 rounded font-bold transition ${youtubePlaying ? 'bg-purple-600 text-white' : 'bg-zinc-800 text-zinc-300'}`}
-              style={{ fontSize: '9px' }}
-            >
-              {youtubePlaying ? '⏸️ PAUSE AMBIENT' : '▶️ PLAY YOUTUBE AMBIENT'}
-            </button>
-          </div>
-
-          {youtubePlaying && getYoutubeId(youtubeUrl) && (
-            <iframe
-              width="1"
-              height="1"
-              src={`https://www.youtube.com/embed/${getYoutubeId(youtubeUrl)}?autoplay=1&loop=1&playlist=${getYoutubeId(youtubeUrl)}`}
-              title="YouTube Ambient Source"
-              frameBorder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              style={{ position: 'absolute', opacity: 0, pointerEvents: 'none' }}
-            />
-          )}
-
-          <div className="pod-tiles-container flex-1 overflow-y-auto">
-            {orderedTiles.map((tile) => (
-              <div key={tile.uid} className="leaf-video-tile" title={tile.type === 'local' ? 'You' : `User ${tile.uid}`}>
-                {tile.type === 'local'
-                  ? <VideoTile uid={tile.uid} type="local" agora={agora} flexGrow={1} onResizeStart={() => {}} onDoubleClick={() => {}} isStrip popoutActive={popoutActive} minimalStudyMode={true} />
-                  : <VideoTile uid={tile.uid} type="remote" user={tile.user} flexGrow={1} onResizeStart={() => {}} onDoubleClick={() => {}} isStrip popoutActive={popoutActive} minimalStudyMode={true} />
-                }
-              </div>
-            ))}
-          </div>
-
-          <div 
-            onMouseDown={handleStudyDockResizeMouseDown}
-            style={{
-              position: 'absolute',
-              right: '2px',
-              bottom: '2px',
-              width: '10px',
-              height: '10px',
-              cursor: 'se-resize',
-              background: 'rgba(255, 255, 255, 0.25)',
-              borderRadius: '2px',
-              zIndex: 20
-            }}
-          />
-        </div>
-      )}
+      {/* Draggable study tree pod removed, replaced with full camera grid below */}
 
       {/* Movie Room Cinematic Screenshare Layout */}
       {currentChannel === 'movie-party' && (
@@ -2042,7 +2185,7 @@ export function CallView({ agora }) {
       )}
 
       {/* Render traditional video layouts only when not in movie party cinema mode or tree study mode */}
-      {currentChannel !== 'movie-party' && currentChannel !== 'study-room' && (
+      {currentChannel !== 'movie-party' && (
         <>
           {/* Focus mode: one big tile + strip */}
           {isFocused && focusedTile && (
@@ -2060,7 +2203,46 @@ export function CallView({ agora }) {
 
           {/* Normal grid mode — flex rows */}
           {!isFocused && !gameActive && (
-            <div className={`video-grid relative ${agora.screenShareEnabled ? 'has-screen' : ''}`}>
+            <div 
+              className={`video-grid relative ${agora.screenShareEnabled ? 'has-screen' : ''}`}
+              style={(currentChannel === 'chill-beats' || currentChannel === 'study-room') ? {
+                position: 'absolute',
+                left: currentChannel === 'study-room' ? `${studyDockPos.x}px` : `${lofiGridPos.x}px`,
+                top: currentChannel === 'study-room' ? `${studyDockPos.y}px` : `${lofiGridPos.y}px`,
+                width: currentChannel === 'study-room' ? `${studyDockSize.w}px` : `${lofiGridSize.w}px`,
+                height: currentChannel === 'study-room' ? `${studyDockSize.h}px` : `${lofiGridSize.h}px`,
+                zIndex: 105,
+                cursor: 'move',
+                userSelect: 'none'
+              } : {}}
+              onMouseDown={(currentChannel === 'chill-beats' || currentChannel === 'study-room') 
+                ? (currentChannel === 'study-room' ? handleStudyDockMoveMouseDown : handleLofiGridMoveMouseDown) 
+                : undefined}
+            >
+              {(currentChannel === 'chill-beats' || currentChannel === 'study-room') && (
+                <div 
+                  onMouseDown={(e) => { 
+                    e.stopPropagation(); 
+                    if (currentChannel === 'study-room') {
+                      handleStudyDockResizeMouseDown(e);
+                    } else {
+                      handleLofiGridResizeMouseDown(e);
+                    }
+                  }}
+                  style={{
+                    position: 'absolute',
+                    right: '2px',
+                    bottom: '2px',
+                    width: '10px',
+                    height: '10px',
+                    cursor: 'se-resize',
+                    background: 'rgba(255, 255, 255, 0.25)',
+                    borderRadius: '2px',
+                    zIndex: 120
+                  }}
+                  title="Drag to resize grid"
+                />
+              )}
 
               {agora.screenShareEnabled && (
                 <div className="screen-share-container">
@@ -2069,11 +2251,7 @@ export function CallView({ agora }) {
               )}
 
               <div className={`tiles-flex ${agora.screenShareEnabled ? 'with-screen' : ''}`}>
-                {rows.map((row, ri) => (
-                  <div key={ri} className="tiles-row">
-                    {row.map((tile, ci) => renderTile(tile, ri * effectiveCols + ci, 'main'))}
-                  </div>
-                ))}
+                {orderedTiles.map((tile, idx) => renderTile(tile, idx, 'main'))}
               </div>
             </div>
           )}
