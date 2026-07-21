@@ -4,7 +4,7 @@ import {
   Mic, MicOff, Video, VideoOff, Monitor, MonitorOff,
   PhoneOff, Settings, Maximize, Minimize, Grid2X2,
   Focus, ExternalLink, Gamepad2, Play, Pause, Volume2, VolumeX,
-  Shuffle, SkipBack, SkipForward, Repeat, Trash2, Plus, ListMusic, Volume1
+  Shuffle, SkipBack, SkipForward, Repeat, Trash2, Plus, ListMusic, Volume1, Timer
 } from 'lucide-react';
 import { useAppStore } from '../contexts/store';
 import { WordleGame } from './WordleGame';
@@ -505,7 +505,7 @@ export function CallView({ agora }) {
   const [controlBarHeight, setControlBarHeight] = useState(76);
   const [studyDockPos, setStudyDockPos] = useState({ x: 80, y: 150 });
   const [studyDockSize, setStudyDockSize] = useState({ w: 200, h: 320 });
-  const [pomoDockPos, setPomoDockPos] = useState({ x: 1100, y: 30 });
+  const [pomoDockPos, setPomoDockPos] = useState({ x: 800, y: 150 });
   const [pomoDockSize, setPomoDockSize] = useState({ w: 220, h: 220 });
   const [youtubeDockPos, setYoutubeDockPos] = useState({ x: 480, y: 150 });
   const [youtubeDockSize, setYoutubeDockSize] = useState({ w: 290, h: 320 });
@@ -522,11 +522,12 @@ export function CallView({ agora }) {
   const [selectedGame, setSelectedGame] = useState(null);
   const [lofiGridPos, setLofiGridPos] = useState({ x: 80, y: 150 });
   const [lofiGridSize, setLofiGridSize] = useState({ w: 200, h: 320 });
+  const [pomoVisible, setPomoVisible] = useState(false);
 
   useEffect(() => {
-    const screenW = window.innerWidth;
-    setPomoDockPos({ x: screenW - 220 - 40, y: 30 });
-    setYoutubeDockPos({ x: Math.floor((screenW - 290) / 2), y: 150 });
+    const callViewW = callViewRef.current ? callViewRef.current.clientWidth : (window.innerWidth - 220);
+    setPomoDockPos({ x: callViewW - 220 - 40, y: 150 });
+    setYoutubeDockPos({ x: Math.floor((callViewW - 290) / 2), y: 150 });
     setLofiGridPos({ x: 80, y: 150 });
   }, []);
 
@@ -1390,6 +1391,7 @@ export function CallView({ agora }) {
   // Reset selected game & close active states when switching channels
   useEffect(() => {
     setSelectedGame(null);
+    setPomoVisible(false);
     if (gameActive && typeof endGame === 'function') {
       endGame();
     }
@@ -1755,7 +1757,7 @@ export function CallView({ agora }) {
       {(currentChannel === 'chill-beats' || currentChannel === 'study-room') && (
         <>
       {/* Draggable & Resizable Pomodoro / Custom Alarm Timer Pod */}
-      {(currentChannel === 'study-room' || currentChannel === 'chill-beats') && (
+      {(currentChannel === 'study-room' || currentChannel === 'chill-beats') && pomoVisible && (
         <div 
           className="study-pomo-alarm-pod flex flex-col"
           style={{
@@ -1859,15 +1861,14 @@ export function CallView({ agora }) {
               zIndex: 100
             }}
           >
-            <div className="album-deck-header" onMouseDown={handleYoutubeDockMoveMouseDown} style={{ cursor: 'move', userSelect: 'none' }}>
-              <span className="album-deck-title flex items-center gap-1.5"><ListMusic size={16} /> Playlist</span>
-              <div className={`live-dot ${youtubePlaying ? 'active' : ''}`} />
-            </div>
-
             <div className="album-deck-content flex-1 overflow-y-auto px-4 pb-4 text-[10px] flex flex-col gap-4 pt-4">
               
               {/* Spinning vinyl disk album cover block */}
-              <div className="album-cover-card flex items-center gap-3.5 bg-black/30 p-3 rounded-xl border border-white/5 shadow-lg">
+              <div 
+                className="album-cover-card flex items-center gap-3.5 bg-black/30 p-3 rounded-xl border border-white/5 shadow-lg"
+                onMouseDown={handleYoutubeDockMoveMouseDown}
+                style={{ cursor: 'move', userSelect: 'none' }}
+              >
                 <div className="vinyl-record-container relative flex-shrink-0 w-12 h-12">
                   <div className={`vinyl-disk ${youtubePlaying ? 'spinning' : ''}`} />
                   <div className="vinyl-center" />
@@ -2490,6 +2491,18 @@ export function CallView({ agora }) {
                 >
                   <Volume2 size={scaledIconSize} />
                   <span className="ctrl-label" style={scaledLabelStyle}>{lofiPlaying ? 'Lofi On' : 'Ambient'}</span>
+                </button>
+              )}
+
+              {(currentChannel === 'study-room' || currentChannel === 'chill-beats') && (
+                <button 
+                  className={`ctrl-btn alarm-btn ${pomoVisible ? 'active bg-purple-600 border border-purple-500' : 'off'}`}
+                  style={scaledBtnStyle}
+                  onClick={() => setPomoVisible(!pomoVisible)}
+                  title="Toggle Alarm/Timer"
+                >
+                  <Timer size={scaledIconSize} />
+                  <span className="ctrl-label" style={scaledLabelStyle}>Alarm</span>
                 </button>
               )}
               

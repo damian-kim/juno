@@ -1293,6 +1293,7 @@
 
 /* Draggable & Resizable Alarm Timer Pod */
 .study-pomo-alarm-pod {
+  position: absolute;
   box-shadow: 0 10px 40px rgba(0,0,0,0.4);
   border: 2px solid #8bc34a;
   border-radius: 16px;

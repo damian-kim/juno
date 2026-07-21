@@ -1,7 +1,6 @@
 import { Mic, Monitor, Users, Video, Zap, Radio, Activity } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
-import { animate } from 'animejs/animation';
-import { stagger, random } from 'animejs/utils';
+import { animate, stagger } from 'animejs';
 import { useAppStore } from '../contexts/store';
 import './HomeView.css';
 
@@ -151,25 +150,8 @@ export function HomeView({ agora }) {
     return () => cancelAnimationFrame(animFrame);
   }, []);
 
-  // Mount entrance animations & feature pop-ins
+  // Mount entrance animations & feature pop-ins handled via CSS
   useEffect(() => {
-    // Stagger scale up the voice pod cards
-    animate('.voice-pod-node', {
-      scale: [0, 1],
-      opacity: [0, 1],
-      delay: stagger(120),
-      duration: 800,
-      ease: 'outBack'
-    });
-
-    // Stagger the feature cards pop-in
-    animate('.feature-card', {
-      translateY: [20, 0],
-      opacity: [0, 1],
-      delay: stagger(100, { start: 100 }),
-      duration: 700,
-      ease: 'outQuad'
-    });
   }, []);
 
   // Click-to-join handler with smooth state trigger
@@ -226,7 +208,7 @@ export function HomeView({ agora }) {
         {/* Feature cards */}
         <div className="feature-grid">
           {FEATURE_CARDS.map(card => (
-            <div key={card.title} className="feature-card" style={{ opacity: 0 }}>
+            <div key={card.title} className="feature-card">
               <div className="feature-icon" style={{ color: card.color, background: card.color + '1a' }}>
                 <card.icon size={18} aria-hidden />
               </div>

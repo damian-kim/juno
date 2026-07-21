@@ -247,6 +247,12 @@
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
   overflow: hidden;
   transition: transform var(--t-mid), border-color var(--t-fast), background var(--t-fast), box-shadow var(--t-mid);
+  animation: scale-up 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes scale-up {
+  from { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+  to { transform: translate(-50%, -50%) scale(1); opacity: 1; }
 }
 
 /* Mouse-following radial glow within each card (Kokonut UI signature) */
