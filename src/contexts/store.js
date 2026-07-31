@@ -234,12 +234,8 @@ export const useAppStore = create((set, get) => ({
   // ── Channels ─────────────────────────────────────────────────────────────────
   channels: [
     { id: 'general',       name: 'general',       type: 'voice', members: 0 },
-    { id: 'gaming',        name: 'gaming',        type: 'voice', members: 0 },
-    { id: 'study-room',    name: 'study room',    type: 'voice', members: 0 },
     { id: 'chill-beats',   name: 'chill beats',   type: 'voice', members: 0 },
-    { id: 'movie-party',   name: 'movie room',    type: 'voice', members: 0 },
-    { id: 'general-chat',  name: 'general-chat',  type: 'text',  members: 0 },
-    { id: 'announcements', name: 'announcements', type: 'text',  members: 0 },
+    { id: 'gaming',        name: 'gaming',        type: 'voice', members: 0 },
   ],
 
   channelUsers: [],

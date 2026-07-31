@@ -23,19 +23,15 @@ export function HomeView({ agora }) {
   const [activeDragId, setActiveDragId] = useState(null);
   
   const [positions, setPositions] = useState({
-    general: { left: 20, top: 25 },
-    gaming: { left: 80, top: 25 },
-    'study-room': { left: 20, top: 75 },
-    'chill-beats': { left: 80, top: 75 },
-    'movie-party': { left: 50, top: 82 }
+    general: { left: 24, top: 34 },
+    'chill-beats': { left: 50, top: 72 },
+    gaming: { left: 76, top: 34 },
   });
 
   const [offsets, setOffsets] = useState({
     general: { x: 0, y: 0 },
     gaming: { x: 0, y: 0 },
-    'study-room': { x: 0, y: 0 },
     'chill-beats': { x: 0, y: 0 },
-    'movie-party': { x: 0, y: 0 }
   });
 
   const dragStartRef = useRef({ mouseX: 0, mouseY: 0, startLeft: 0, startTop: 0, moved: false, canvasRect: null });
