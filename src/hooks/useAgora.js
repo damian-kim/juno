@@ -178,7 +178,9 @@ export function useAgora() {
         const msg = JSON.parse(decoder.decode(payload));
         console.log('Parsed stream message data:', msg);
         
-        if (msg.type === 'chess-move') {
+        if (msg.type === 'chat-message') {
+          window.dispatchEvent(new CustomEvent('chat-message-sync', { detail: msg }));
+        } else if (msg.type === 'chess-move') {
           window.dispatchEvent(new CustomEvent('chess-move-sync', { detail: msg }));
         } else if (msg.type === 'crossword-sync') {
           window.dispatchEvent(new CustomEvent('crossword-sync-evt', { detail: msg }));

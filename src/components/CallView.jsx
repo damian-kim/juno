@@ -4,7 +4,7 @@ import {
   Mic, MicOff, Video, VideoOff, Monitor, MonitorOff,
   PhoneOff, Settings, Maximize, Minimize, Grid2X2,
   Focus, ExternalLink, Gamepad2, Play, Pause, Volume2, VolumeX,
-  Shuffle, SkipBack, SkipForward, Repeat, Trash2, Plus, ListMusic, Volume1, Timer
+  Shuffle, SkipBack, SkipForward, Repeat, Trash2, Plus, ListMusic, Volume1, Timer, MessageSquare, Send, X
 } from 'lucide-react';
 import { useAppStore } from '../contexts/store';
 import { WordleGame } from './WordleGame';
@@ -54,8 +54,6 @@ function VideoTile({ uid, type, agora, user, flexGrow, onResizeStart, onDoubleCl
   
   // Extract specific active text string matched to this tile card instance
   const currentSubtitleText = agora.subtitles?.[currentKey] || "";
-
-  console.log('VideoTile checking key:', currentKey, 'subtitles object:', agora.subtitles);
 
   const color = isLocal
     ? '#7c6dfa'
@@ -523,6 +521,104 @@ export function CallView({ agora }) {
   const [lofiGridPos, setLofiGridPos] = useState({ x: 80, y: 150 });
   const [lofiGridSize, setLofiGridSize] = useState({ w: 200, h: 320 });
   const [pomoVisible, setPomoVisible] = useState(false);
+
+  // In-Call Chat state
+  const [showInCallChat, setShowInCallChat] = useState(false);
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [unreadChatCount, setUnreadChatCount] = useState(0);
+  const chatEndRef = useRef(null);
+  const showInCallChatRef = useRef(showInCallChat);
+
+  useEffect(() => {
+    showInCallChatRef.current = showInCallChat;
+  }, [showInCallChat]);
+
+  // Fetch in-call chat history from backend on join or channel change
+  useEffect(() => {
+    let isSubscribed = true;
+    const fetchChatHistory = async () => {
+      try {
+        const BACKEND_URL = 'https://api.juno.rest';
+        const res = await fetch(`${BACKEND_URL}/api/chat?channel=${currentChannel}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (isSubscribed && Array.isArray(data.messages)) {
+            setChatMessages(data.messages);
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to fetch in-call chat history:', err);
+      }
+    };
+    fetchChatHistory();
+    return () => { isSubscribed = false; };
+  }, [currentChannel]);
+
+  // Listen for real-time chat messages broadcast via Agora stream messages
+  useEffect(() => {
+    const handleChatSync = (e) => {
+      const msg = e.detail;
+      if (msg && msg.text) {
+        setChatMessages(prev => {
+          if (prev.some(m => m.id === msg.id)) return prev;
+          return [...prev, msg];
+        });
+        if (!showInCallChatRef.current) {
+          setUnreadChatCount(prev => prev + 1);
+        }
+      }
+    };
+    window.addEventListener('chat-message-sync', handleChatSync);
+    return () => window.removeEventListener('chat-message-sync', handleChatSync);
+  }, []);
+
+  // Auto-scroll chat to bottom
+  useEffect(() => {
+    if (showInCallChat && chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [chatMessages, showInCallChat]);
+
+  // Send message
+  const handleSendInCallMessage = async (e) => {
+    if (e) e.preventDefault();
+    if (!chatInput.trim()) return;
+    const textToSend = chatInput.trim();
+    setChatInput('');
+
+    const newMsg = {
+      id: `msg-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`,
+      channel: currentChannel,
+      author: user?.name || 'You',
+      text: textToSend,
+      timestamp: Date.now(),
+      uid: agora.localUid
+    };
+
+    setChatMessages(prev => [...prev, newMsg]);
+
+    try {
+      const BACKEND_URL = 'https://api.juno.rest';
+      await fetch(`${BACKEND_URL}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          channel: currentChannel,
+          author: user?.name || 'You',
+          text: textToSend,
+          uid: agora.localUid
+        })
+      });
+    } catch (err) {
+      console.error('Failed to save in-call chat message:', err);
+    }
+
+    agora.sendCustomStreamMessage({
+      type: 'chat-message',
+      ...newMsg
+    });
+  };
 
   useEffect(() => {
     const callViewW = callViewRef.current ? callViewRef.current.clientWidth : (window.innerWidth - 220);
@@ -2506,6 +2602,24 @@ export function CallView({ agora }) {
                 </button>
               )}
               
+              <button 
+                className={`ctrl-btn ${showInCallChat ? 'active' : ''}`}
+                style={scaledBtnStyle}
+                onClick={() => {
+                  setShowInCallChat(!showInCallChat);
+                  if (!showInCallChat) setUnreadChatCount(0);
+                }}
+                title="Toggle In-Call Chat"
+              >
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <MessageSquare size={scaledIconSize} />
+                  {unreadChatCount > 0 && !showInCallChat && (
+                    <span className="in-call-chat-badge">{unreadChatCount}</span>
+                  )}
+                </div>
+                <span className="ctrl-label" style={scaledLabelStyle}>Chat</span>
+              </button>
+
               <button className="ctrl-btn end-call" style={scaledBtnStyle} onClick={handleLeave} title="Leave">
                 <PhoneOff size={scaledIconSize} />
                 <span className="ctrl-label" style={scaledLabelStyle}>Leave</span>
@@ -2529,6 +2643,58 @@ export function CallView({ agora }) {
           </div>
         );
       })()}
+
+      {/* In-Call Chat Drawer */}
+      {showInCallChat && (
+        <div className="in-call-chat-drawer">
+          <div className="in-call-chat-header">
+            <div className="in-call-chat-title">
+              <MessageSquare size={16} />
+              <span>#{currentChannel} Chat</span>
+            </div>
+            <button className="in-call-chat-close" onClick={() => setShowInCallChat(false)}>
+              <X size={16} />
+            </button>
+          </div>
+          
+          <div className="in-call-chat-messages">
+            {chatMessages.length === 0 ? (
+              <div className="in-call-chat-empty">
+                <p>No messages in #{currentChannel} yet.</p>
+                <span>Say hello to start the call chat! (Messages clear after 1 hr idle)</span>
+              </div>
+            ) : (
+              chatMessages.map(msg => {
+                const isMe = msg.author === (user?.name || 'You') || msg.uid === agora.localUid;
+                const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                return (
+                  <div key={msg.id} className={`in-call-msg-bubble ${isMe ? 'is-me' : ''}`}>
+                    <div className="in-call-msg-meta">
+                      <span className="in-call-msg-author">{msg.author}</span>
+                      <span className="in-call-msg-time">{timeStr}</span>
+                    </div>
+                    <div className="in-call-msg-text">{msg.text}</div>
+                  </div>
+                );
+              })
+            )}
+            <div ref={chatEndRef} />
+          </div>
+
+          <form className="in-call-chat-input-form" onSubmit={handleSendInCallMessage}>
+            <input
+              type="text"
+              className="in-call-chat-input"
+              placeholder={`Message #${currentChannel}...`}
+              value={chatInput}
+              onChange={e => setChatInput(e.target.value)}
+            />
+            <button type="submit" className="in-call-chat-send-btn" disabled={!chatInput.trim()}>
+              <Send size={15} />
+            </button>
+          </form>
+        </div>
+      )}
 
       {agora.error && <div className="error-toast" role="alert">⚠ {agora.error}</div>}
     </div>
