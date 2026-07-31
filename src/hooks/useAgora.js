@@ -322,11 +322,18 @@ export function useAgora() {
       } catch (micErr) {
         console.warn('Microphone permission denied or unavailable; joining in muted mode:', micErr);
         setMicEnabled(false);
+        setError('Microphone permission blocked by browser. Joined in listen-only mode.');
+        setTimeout(() => setError(null), 5000);
       }
 
       setJoined(true);
     } catch (err) {
-      setError(err.message || 'Failed to join');
+      if (err?.code === 'PERMISSION_DENIED' || err?.message?.includes('PERMISSION_DENIED')) {
+        setError('Media permission denied by browser.');
+      } else {
+        setError(err.message || 'Failed to join channel');
+      }
+      setTimeout(() => setError(null), 5000);
       console.error('Join failed:', err);
     } finally {
       setIsJoining(false);
