@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 AgoraRTC.setLogLevel(4);
 
-const APP_ID      = import.meta.env.VITE_AGORA_APP_ID || 'YOUR_AGORA_APP_ID';
+const APP_ID      = import.meta.env.VITE_AGORA_APP_ID || '6e4fbddaf1c64c9aa10cc5a47b710b41';
 const BACKEND_URL = 'https://api.juno.rest';
 
 // Screen share UIDs use a fixed high-range prefix so we can reliably identify
@@ -310,16 +310,21 @@ export function useAgora() {
       // sendStreamMessage works directly on the client
       dataStreamIdRef.current = true;
 
-      const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
-        microphoneId: selectedMic || undefined,
-        encoderConfig: 'high_quality',
-      });
-      localAudioTrackRef.current = audioTrack;
-      audioTrack.setVolume(localVolume);
-      await client.publish(audioTrack);
+      try {
+        const audioTrack = await AgoraRTC.createMicrophoneAudioTrack({
+          microphoneId: selectedMic || undefined,
+          encoderConfig: 'high_quality',
+        });
+        localAudioTrackRef.current = audioTrack;
+        audioTrack.setVolume(localVolume);
+        await client.publish(audioTrack);
+        setMicEnabled(true);
+      } catch (micErr) {
+        console.warn('Microphone permission denied or unavailable; joining in muted mode:', micErr);
+        setMicEnabled(false);
+      }
 
       setJoined(true);
-      setMicEnabled(true);
     } catch (err) {
       setError(err.message || 'Failed to join');
       console.error('Join failed:', err);
